@@ -23,11 +23,12 @@ parser.add_argument('-p1', '--port1', type= int, help="Port for events", default
 parser.add_argument('-p2', '--port2', type= int, help="Port for events", default=4002)
 parser.add_argument('-a', '--accumulation', type= int, help="Accumulation", default=1)
 parser.add_argument('-s', '--scale', type= float, help="Image scale", default=1)
+parser.add_argument('-r', '--record', action= 'store_true', help="records fenrir's output")
 e_port_1 = parser.parse_args().port1
 e_port_2 = parser.parse_args().port2
 accumulation = parser.parse_args().accumulation
 scale = parser.parse_args().scale
-
+record = parser.parse_args().record
 
 win_name = "Fenrir"
 cv2.namedWindow(win_name)        # Create a named window
@@ -42,64 +43,54 @@ fail2 = False
 it = time.time()
 st = time.time()
 
+fps = 60
+images = []
+slowest = 1/fps
+
 with aestream.UDPInput((640, 480), device = 'cpu', port=e_port_1) as stream1:
     with aestream.UDPInput((640, 480), device = 'cpu', port=e_port_2) as stream2:
-        count = 0    
-        while True:
-
-
-            frame[0:640,0:480,1] +=  stream1.read().numpy() # Provides a (640, 480)
-            #frame[0:640,0:480,0] = frame[0:640,0:480,1]
-            frame[640:640*2,0:480,1] += stream2.read().numpy() # Provides a (640, 480) 
-            #frame[640:640*2,0:480,0] = frame[640:640*2,0:480,2]
-            count += 1
-
-            # pdb.set_trace()
-
-
-            elapsed_time = time.time() - st
-            
-            if elapsed_time >= 10:
-                tt = round(time.time()-it,0)
-                ev1 = round(np.sum(frame[0:640,0:480,:]),0)
-                ev2 = round(np.sum(frame[640:640*2,0:480,:]),0)
-
-                if ev1 == 0 and not fail1:
-                    fail1 = True
-                    print(f"FAILURE cam 1 at t=: {tt}")
-                if ev2 == 0 and not fail2:
-                    fail2 = True
-                    print(f"FAILURE cam 2 at t=: {tt}")
-
-                if fail1 and ev1 > 0:
-                    fail1 = False
-                    print(f"Cam 1 working again at t=: {tt}")
-                if fail2 and ev2 > 0:
-                    fail2 = False
-                    print(f"Cam 2 working again at t=: {tt}")
+        count = 0
+        try:    
+            while True:
 
                 st = time.time()
+                frame[0:640,0:480,1] +=  stream1.read()# Provides a (640, 480)
+                #frame[0:640,0:480,0] = frame[0:640,0:480,1]
+                frame[640:640*2,0:480,1] += stream2.read() # Provides a (640, 480) 
+                #frame[640:640*2,0:480,0] = frame[640:640*2,0:480,2]
+                count += 1
 
+                # pdb.set_trace()
 
-            # pdb.set_trace()
+                # image = cv2.resize(np.transpose(frame), (math.ceil(640*2*scale),math.ceil(480*1*scale)), interpolation = cv2.INTER_AREA)
 
-            # image = cv2.resize(np.transpose(frame), (math.ceil(640*2*scale),math.ceil(480*1*scale)), interpolation = cv2.INTER_AREA)
+                if count >= accumulation:
+                    count = 0
+                    frame[0:640*2,0:4,:] =  np.ones((640*2,4,3))
+                    frame[0:640*2,-4:,:] = np.ones((640*2,4,3))
+                    frame[0:4,0:480,:] =  np.ones((4,480,3))
+                    frame[-4:,0:480,:] =  np.ones((4,480,3))
+                    frame[638:642,0:480,:] =  np.ones((4,480,3))
+                    image = cv2.resize(frame.transpose(1,0,2), (math.ceil(640*2*scale),math.ceil(480*1*scale)), interpolation = cv2.INTER_AREA)
+                    fontScale = 2
+                    thickness = 3
+                    # image = cv2.putText(image, 'L', (1220,940), cv2.FONT_HERSHEY_SIMPLEX, fontScale, (255,255,255), thickness, cv2.LINE_AA)
+                    # image = cv2.putText(image, 'R', (1300,940), cv2.FONT_HERSHEY_SIMPLEX, fontScale, (255,255,255), thickness, cv2.LINE_AA)
+                    cv2.imshow(win_name, image)
+                    
+                    images.append(cv2.convertScaleAbs(image*256))
 
-            if count >= accumulation:
-                count = 0
-                frame[0:640*2,0:4,:] =  np.ones((640*2,4,3))
-                frame[0:640*2,-4:,:] = np.ones((640*2,4,3))
-                frame[0:4,0:480,:] =  np.ones((4,480,3))
-                frame[-4:,0:480,:] =  np.ones((4,480,3))
-                frame[638:642,0:480,:] =  np.ones((4,480,3))
-                image = cv2.resize(frame.transpose(1,0,2), (math.ceil(640*2*scale),math.ceil(480*1*scale)), interpolation = cv2.INTER_AREA)
-                fontScale = 2
-                thickness = 3
-                # image = cv2.putText(image, 'L', (1220,940), cv2.FONT_HERSHEY_SIMPLEX, fontScale, (255,255,255), thickness, cv2.LINE_AA)
-                # image = cv2.putText(image, 'R', (1300,940), cv2.FONT_HERSHEY_SIMPLEX, fontScale, (255,255,255), thickness, cv2.LINE_AA)
-                cv2.imshow(win_name, image)
-                cv2.waitKey(1)
-                frame = np.zeros((640*2,480*1,3))
+                    slowest = max(slowest, time.time()-st)
 
-
-        
+                    cv2.waitKey(1)
+                    frame = np.zeros((640*2,480*1,3))
+                
+        except:
+            if record:
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                fps = int(1/slowest)
+                out = cv2.VideoWriter('./fenrir_view.mp4', fourcc, fps, (math.ceil(640*2*scale),math.ceil(480*1*scale)))
+                for image in images:
+                    out.write(image)
+                out.release()
+                print("\n\nVideo saved\n")
