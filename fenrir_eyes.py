@@ -1,6 +1,6 @@
 #import torch
-import torch
-import torch.nn as nn
+# import torch
+# import torch.nn as nn
 import random
 import numpy as np
 import math
@@ -50,6 +50,7 @@ slowest = 1/fps
 with aestream.UDPInput((640, 480), device = 'cpu', port=e_port_1) as stream1:
     with aestream.UDPInput((640, 480), device = 'cpu', port=e_port_2) as stream2:
         count = 0
+        python_start = time.time()
         try:    
             while True:
 
@@ -79,18 +80,21 @@ with aestream.UDPInput((640, 480), device = 'cpu', port=e_port_1) as stream1:
                     cv2.imshow(win_name, image)
                     
                     images.append(cv2.convertScaleAbs(image*256))
-
-                    slowest = max(slowest, time.time()-st)
+                    # if time.time() - python_start > 1:
+                    #     slowest = max(slowest, time.time()-st)
 
                     cv2.waitKey(1)
                     frame = np.zeros((640*2,480*1,3))
+                    while True:
+                        if time.time() - st > 30:
+                            break
                 
         except:
             if record:
                 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                fps = int(1/slowest)
+                fps = 30 #int(1/slowest)
                 out = cv2.VideoWriter('./fenrir_view.mp4', fourcc, fps, (math.ceil(640*2*scale),math.ceil(480*1*scale)))
                 for image in images:
                     out.write(image)
                 out.release()
-                print("\n\nVideo saved\n")
+                print("\n\nVideo saved with "+str(fps)+" fps\n")
