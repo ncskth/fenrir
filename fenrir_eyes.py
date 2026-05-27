@@ -1,3 +1,7 @@
+## 55.4cm = 2560px
+## 1cm = 46px
+## 5cm = 230px
+## 5cmx5cm + 5cm buffer each side = 322px x 322px
 #import torch
 # import torch
 # import torch.nn as nn
@@ -29,6 +33,7 @@ e_port_2 = parser.parse_args().port2
 accumulation = parser.parse_args().accumulation
 scale = parser.parse_args().scale
 record = parser.parse_args().record
+#record = False
 
 win_name = "Fenrir"
 cv2.namedWindow(win_name)        # Create a named window
@@ -46,55 +51,51 @@ st = time.time()
 fps = 60
 images = []
 slowest = 1/fps
+frame_index = 0
 
 with aestream.UDPInput((640, 480), device = 'cpu', port=e_port_1) as stream1:
     with aestream.UDPInput((640, 480), device = 'cpu', port=e_port_2) as stream2:
         count = 0
         python_start = time.time()
-        try:    
-            while True:
+        while True:
+            #print("Loop!")
 
-                st = time.time()
-                frame[0:640,0:480,1] +=  stream1.read()# Provides a (640, 480)
-                #frame[0:640,0:480,0] = frame[0:640,0:480,1]
-                frame[640:640*2,0:480,1] += stream2.read() # Provides a (640, 480) 
-                #frame[640:640*2,0:480,0] = frame[640:640*2,0:480,2]
-                count += 1
+            st = time.time()
+            frame[0:640,0:480,1] =  stream1.read()# Provides a (640, 480)
+            #frame[0:640,0:480,0] = frame[0:640,0:480,1]
+            frame[640:640*2,0:480,1] = stream2.read() # Provides a (640, 480)
+            #frame[640:640*2,0:480,0] = frame[640:640*2,0:480,2]
+            count += 1
 
-                # pdb.set_trace()
+            # pdb.set_trace()
 
-                # image = cv2.resize(np.transpose(frame), (math.ceil(640*2*scale),math.ceil(480*1*scale)), interpolation = cv2.INTER_AREA)
+            # image = cv2.resize(np.transpose(frame), (math.ceil(640*2*scale),math.ceil(480*1*scale)), interpolation = cv2.INTER_AREA)
 
-                if count >= accumulation:
-                    count = 0
-                    frame[0:640*2,0:4,:] =  np.ones((640*2,4,3))
-                    frame[0:640*2,-4:,:] = np.ones((640*2,4,3))
-                    frame[0:4,0:480,:] =  np.ones((4,480,3))
-                    frame[-4:,0:480,:] =  np.ones((4,480,3))
-                    frame[638:642,0:480,:] =  np.ones((4,480,3))
-                    image = cv2.resize(frame.transpose(1,0,2), (math.ceil(640*2*scale),math.ceil(480*1*scale)), interpolation = cv2.INTER_AREA)
-                    fontScale = 2
-                    thickness = 3
-                    # image = cv2.putText(image, 'L', (1220,940), cv2.FONT_HERSHEY_SIMPLEX, fontScale, (255,255,255), thickness, cv2.LINE_AA)
-                    # image = cv2.putText(image, 'R', (1300,940), cv2.FONT_HERSHEY_SIMPLEX, fontScale, (255,255,255), thickness, cv2.LINE_AA)
-                    cv2.imshow(win_name, image)
-                    
-                    images.append(cv2.convertScaleAbs(image*256))
-                    # if time.time() - python_start > 1:
-                    #     slowest = max(slowest, time.time()-st)
+            if count >= accumulation:
+                count = 0
+                #frame[0:640*2,0:4,:] =  np.ones((640*2,4,3))
+                #frame[0:640*2,-4:,:] = np.ones((640*2,4,3))
+                #frame[0:4,0:480,:] =  np.ones((4,480,3))
+                #frame[-4:,0:480,:] =  np.ones((4,480,3))
+                #frame[638:642,0:480,:] =  np.ones((4,480,3))
+                #frame /= accumulation
+                image = cv2.resize(frame.transpose(1,0,2), (math.ceil(640*2*scale),math.ceil(480*1*scale)), interpolation = cv2.INTER_AREA)
+                #cv2.imwrite(f"calibration_frames/frame_{frame_index}.png", image)
+                if record and frame_index == 1:
+                    np.save(f"calibration_frames/most_newly_frame_{frame_index}.npy", frame)
+                fontScale = 2
+                thickness = 3
+                # image = cv2.putText(image, 'L', (1220,940), cv2.FONT_HERSHEY_SIMPLEX, fontScale, (255,255,255), thickness, cv2.LINE_AA)
+                # image = cv2.putText(image, 'R', (1300,940), cv2.FONT_HERSHEY_SIMPLEX, fontScale, (255,255,255), thickness, cv2.LINE_AA)
+                cv2.imshow(win_name, image)
 
-                    cv2.waitKey(1)
-                    frame = np.zeros((640*2,480*1,3))
-                    while True:
-                        if time.time() - st > 30:
-                            break
-                
-        except:
-            if record:
-                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                fps = 30 #int(1/slowest)
-                out = cv2.VideoWriter('./fenrir_view.mp4', fourcc, fps, (math.ceil(640*2*scale),math.ceil(480*1*scale)))
-                for image in images:
-                    out.write(image)
-                out.release()
-                print("\n\nVideo saved with "+str(fps)+" fps\n")
+                #images.append(cv2.convertScaleAbs(image*256))
+                # if time.time() - python_start > 1:
+                #     slowest = max(slowest, time.time()-st)
+
+                cv2.waitKey(1)
+                frame = np.zeros((640*2,480*1,3))
+                frame_index += 1
+                #while True:
+                #    if time.time() - st > 30:
+                #        break
