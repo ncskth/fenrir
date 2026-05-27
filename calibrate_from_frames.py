@@ -155,7 +155,35 @@ def calibrate_from_pixel_peaks(peak_files_l: List[str],
     np.save(dist_coeffs_r, distortion_coeffs_r)
 
 
+def test_mono_calibration(frame_path: str,
+                          left_matrix_path: str,
+                          right_matrix_path: str,
+                          left_distortion_path: str,
+                          right_distortion_path: str):
+    frame = np.load(frame_path)
+    frame_l = frame[:640, :, 1]
+    frame_r = frame[640:, :, 1]
+
+    mat_l = np.load(left_matrix_path)
+    mat_r = np.load(right_matrix_path)
+    coeffs_l = np.load(left_distortion_path)
+    coeffs_r = np.load(right_distortion_path)
+
+    undistort_l = cv2.undistort(frame_l, mat_l, coeffs_l, None, None)
+    undistort_r = cv2.undistort(frame_r, mat_r, coeffs_r, None, None)
+
+    fig = plt.figure()
+    ax_l = fig.add_subplot(1, 2, 1)
+    ax_r = fig.add_subplot(1, 2, 2)
+
+    ax_l.imshow(undistort_l.T)
+    ax_r.imshow(undistort_r.T)
+
+    plt.show()
+
+
 if __name__ == "__main__":
+    """
     peak_files_l = []
     peak_files_r = []
     for ff in frame_files:
@@ -170,3 +198,10 @@ if __name__ == "__main__":
     calibrate_from_pixel_peaks(peak_files_l, peak_files_r, 0.038, (3, 5),
                                "calibration_data/cam_mat_l.npy", "calibration_data/cam_mat_r.npy",
                                "calibration_data/dist_coeffs_l.npy", "calibration_data/dist_coeffs_r.npy")
+    """
+    for ff in frame_files:
+        test_mono_calibration(ff,
+                              "calibration_data/cam_mat_l.npy",
+                              "calibration_data/cam_mat_r.npy",
+                              "calibration_data/dist_coeffs_l.npy",
+                              "calibration_data/dist_coeffs_r.npy")
