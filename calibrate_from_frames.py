@@ -190,12 +190,12 @@ def calibrate_from_pixel_peaks(peak_files_l: List[str],
         verify_correspondences(world_points, peaks_r[0], "Right Camera")
 
     _, camera_matrix_l, distortion_coeffs_l, _, _ = cv2.calibrateCamera(
-        world_points_copied, peaks_l, (480, 640), None, None)
+        world_points_copied, peaks_l, (640, 480), None, None)
     _, camera_matrix_r, distortion_coeffs_r, _, _ = cv2.calibrateCamera(
-        world_points_copied, peaks_r, (480, 640), None, None)
+        world_points_copied, peaks_r, (640, 480), None, None)
 
     # Stereo calibration with proper flags
-    flags = cv2.CALIB_USE_INTRINSIC_GUESS  # Use individual calibration results
+    flags = 0 # Use individual calibration results
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-5)
 
     _, camera_matrix_l, distortion_coeffs_l, \
@@ -208,7 +208,7 @@ def calibrate_from_pixel_peaks(peak_files_l: List[str],
                                                      distortion_coeffs_l,
                                                      camera_matrix_r,
                                                      distortion_coeffs_r,
-                                                     (480, 640),
+                                                     (640, 480),
                                                      criteria=criteria,
                                                      flags=flags)
 
@@ -267,8 +267,8 @@ def test_stereo_calibration(frame_path: str, calib_data_folder: str):
     frame = np.load(frame_path)
 
     # Extract and process - KEEP TRANSPOSED (same as detection)
-    frame_l_raw = frame[:640, :, 1].T  # Shape (480, 640)
-    frame_r_raw = frame[640:, :, 1].T  # Shape (480, 640)
+    frame_l_raw = frame[:640, :, 1].T  # Shape (640, 480)
+    frame_r_raw = frame[640:, :, 1].T  # Shape (640, 480)
 
     # Apply Gaussian blur
     frame_l = gaussian(frame_l_raw, sigma=3)
@@ -285,21 +285,20 @@ def test_stereo_calibration(frame_path: str, calib_data_folder: str):
     cam_mat_r = np.load(os.path.join(calib_data_folder, "cam_mat_r.npy"))
     dist_coeffs_l = np.load(os.path.join(calib_data_folder, "dist_coeffs_l.npy"))
     dist_coeffs_r = np.load(os.path.join(calib_data_folder, "dist_coeffs_r.npy"))
-    rotation = np.load(os.path.join(calib_data_folder, "rotation.npy"))
-    translation = np.load(os.path.join(calib_data_folder, "translation.npy"))
+    #rotation = np.load(os.path.join(calib_data_folder, "rotation.npy"))
+    #translation = np.load(os.path.join(calib_data_folder, "translation.npy"))
 
     print(f"Image shape: {h}x{w}")
     print(f"Camera matrix shape: {cam_mat_l.shape}")
-    print(f"Translation: {translation}")
+    #print(f"Translation: {translation}")
 
     # Stereo rectification
-    rectification_flags = cv2.CALIB_ZERO_DISPARITY
+    #rectification_flags = cv2.CALIB_ZERO_DISPARITY
     R1, R2, P1, P2, Q, roi1, roi2 = cv2.stereoRectify(
         cam_mat_l, dist_coeffs_l,
         cam_mat_r, dist_coeffs_r,
-        (w, h), rotation, translation,  # (640, 480) for transposed images
-        alpha=1,
-        flags=rectification_flags
+        (w, h), np.eye(3), np.array([0.11, 0, 0]),  # (640, 480) for transposed images
+        alpha=0
     )
 
     print(f"P1[0,2] (cx): {P1[0,2]:.1f} (should be ~320)")
@@ -359,63 +358,49 @@ def test_stereo_calibration(frame_path: str, calib_data_folder: str):
 
 
 def test_both_mono_calibrations(frame_path: str, calib_data_folder: str):
-    """Correctly compute reprojection error using the pose from calibration"""
+    """Test both left and right camera undistortion side by side"""
     frame = np.load(frame_path)
-    head, tail = os.path.split(frame_path)
 
-    # Load peaks
-    peaks_l = np.load(os.path.join(head, f"left_peaks_{tail}")).astype(np.float32)
-    peaks_r = np.load(os.path.join(head, f"right_peaks_{tail}")).astype(np.float32)
+    # Process left camera
+    frame_l_raw = frame[:640, :, 1].T
+    frame_l_blurred = gaussian(frame_l_raw, sigma=3)
+    frame_l = (frame_l_blurred / frame_l_blurred.max() * 255).astype(np.uint8)
 
-    # Load calibration
     cam_mat_l = np.load(os.path.join(calib_data_folder, "cam_mat_l.npy"))
-    cam_mat_r = np.load(os.path.join(calib_data_folder, "cam_mat_r.npy"))
     dist_coeffs_l = np.load(os.path.join(calib_data_folder, "dist_coeffs_l.npy"))
+    undistorted_l = cv2.undistort(frame_l, cam_mat_l, dist_coeffs_l)
+
+    # Process right camera
+    frame_r_raw = frame[640:, :, 1].T
+    frame_r_blurred = gaussian(frame_r_raw, sigma=3)
+    frame_r = (frame_r_blurred / frame_r_blurred.max() * 255).astype(np.uint8)
+
+    cam_mat_r = np.load(os.path.join(calib_data_folder, "cam_mat_r.npy"))
     dist_coeffs_r = np.load(os.path.join(calib_data_folder, "dist_coeffs_r.npy"))
+    undistorted_r = cv2.undistort(frame_r, cam_mat_r, dist_coeffs_r)
 
-    # Create world points
-    world_points = create_world_points((3, 5), 0.076)
+    # Display all four images
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
-    # Get the pose for this specific image
-    _, _, _, rvecs_l, tvecs_l = cv2.calibrateCamera(
-        [world_points], [peaks_l], (480, 640), cam_mat_l, dist_coeffs_l
-    )
-    _, _, _, rvecs_r, tvecs_r = cv2.calibrateCamera(
-        [world_points], [peaks_r], (480, 640), cam_mat_r, dist_coeffs_r
-    )
+    axes[0,0].imshow(frame_l, cmap='gray')
+    axes[0,0].set_title("Left - Original")
+    axes[0,0].axis('off')
 
-    # Project using the actual pose
-    projected_l, _ = cv2.projectPoints(world_points, rvecs_l[0], tvecs_l[0], cam_mat_l, dist_coeffs_l)
-    projected_r, _ = cv2.projectPoints(world_points, rvecs_r[0], tvecs_r[0], cam_mat_r, dist_coeffs_r)
+    axes[0,1].imshow(undistorted_l, cmap='gray')
+    axes[0,1].set_title("Left - Undistorted")
+    axes[0,1].axis('off')
 
-    # Compute errors
-    errors_l = np.linalg.norm(peaks_l - projected_l.reshape(-1, 2), axis=1)
-    errors_r = np.linalg.norm(peaks_r - projected_r.reshape(-1, 2), axis=1)
+    axes[1,0].imshow(frame_r, cmap='gray')
+    axes[1,0].set_title("Right - Original")
+    axes[1,0].axis('off')
 
-    print(f"Left camera mean reprojection error: {np.mean(errors_l):.3f} pixels")
-    print(f"Right camera mean reprojection error: {np.mean(errors_r):.3f} pixels")
+    axes[1,1].imshow(undistorted_r, cmap='gray')
+    axes[1,1].set_title("Right - Undistorted")
+    axes[1,1].axis('off')
 
-    # Visualize
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
-    frame_l = frame[:640, :, 1].T
-    frame_r = frame[640:, :, 1].T
-    frame_l = (frame_l / frame_l.max() * 255).astype(np.uint8)
-    frame_r = (frame_r / frame_r.max() * 255).astype(np.uint8)
-
-    axes[0].imshow(frame_l, cmap='gray')
-    axes[0].scatter(peaks_l[:, 0], peaks_l[:, 1], c='r', s=20, label='Detected')
-    axes[0].scatter(projected_l[:, 0, 0], projected_l[:, 0, 1], c='b', s=20, marker='x', label='Projected')
-    axes[0].set_title(f"Left Camera\nReprojection error: {np.mean(errors_l):.2f} px")
-    axes[0].legend()
-
-    axes[1].imshow(frame_r, cmap='gray')
-    axes[1].scatter(peaks_r[:, 0], peaks_r[:, 1], c='r', s=20, label='Detected')
-    axes[1].scatter(projected_r[:, 0, 0], projected_r[:, 0, 1], c='b', s=20, marker='x', label='Projected')
-    axes[1].set_title(f"Right Camera\nReprojection error: {np.mean(errors_r):.2f} px")
-    axes[1].legend()
-
+    plt.tight_layout()
     plt.show()
+
 
 
 def debug_peak_ordering(frame_path: str, grid_shape: Tuple[int, int]):
