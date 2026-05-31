@@ -9,49 +9,48 @@ from scipy.ndimage import center_of_mass
 
 from typing import *
 
-frame_files = ["calibration_frames/frame_1.npy",
-               # "calibration_frames/new_frame_3.npy",
-               "calibration_frames/newer_frame_1.npy",
-               "calibration_frames/newest_frame_1.npy",
-               "calibration_frames/most_newly_frame_1.npy"]
+frame_files = [os.path.join("calibration_frames", f) for f in os.listdir("calibration_frames")]
 
 
 def adaptive_peak_finder(img: np.ndarray, n_expected_peaks: int):
-    peaks = peak_local_max(img, threshold_rel=0.3)
+    peaks = peak_local_max(img, min_distance=3, threshold_rel=0.5)
 
     if len(peaks) == n_expected_peaks:
         return peaks
     elif len(peaks) > n_expected_peaks:
-        small = 0.3
-        curr = 0.35
+        small = 0.5
+        curr = 0.99
         big = curr
-        peaks = peak_local_max(img, threshold_rel=curr)
+        peaks = peak_local_max(img, min_distance=3, threshold_rel=curr)
     else:
-        big = 0.3
-        curr = 0.25
+        big = 0.5
+        curr = 0.01
         small = curr
-        peaks = peak_local_max(img, threshold_rel=curr)
+        peaks = peak_local_max(img, min_distance=3, threshold_rel=curr)
 
     count = 0
     while len(peaks) != n_expected_peaks:
         count += 1
-        if count > 5:
+        if count > 20:
             raise ValueError("Search did not converge!!")
 
         if len(peaks) > n_expected_peaks:
             small = curr
             curr = 0.5*(curr + big)
-            peaks = peak_local_max(img, threshold_rel=curr)
+            peaks = peak_local_max(img, min_distance=3, threshold_rel=curr)
         else:
             big = curr
             curr = 0.5*(curr + small)
-            peaks = peak_local_max(img, threshold_rel=curr)
+            peaks = peak_local_max(img, min_distance=3, threshold_rel=curr)
 
     return peaks
 
 
 def locate_peaks(event_frame: np.ndarray, grid_size: int):
-    frame_blurred = gaussian(event_frame, sigma=3)
+    frame_clipped = np.clip(event_frame, 0, 1)
+    frame_blurred = gaussian(frame_clipped, sigma=3)
+    #plt.imshow(frame_blurred.T)
+    #plt.show()
     peaks = adaptive_peak_finder(frame_blurred, grid_size)
 
     recentered_peaks = []
@@ -59,17 +58,83 @@ def locate_peaks(event_frame: np.ndarray, grid_size: int):
         x = peak[0] - 3
         y = peak[1] - 3
         center = center_of_mass(frame_blurred[x : x + 7, y : y + 7])
-        recentered_peaks.append(np.array([y + center[1], x + center[0]]))
+        recentered_peaks.append(np.array([x + center[0], y + center[1]]))
 
     return np.array(recentered_peaks)
+
+
+# i am losing my mind here
+def get_skewing_matrix(peaks: np.ndarray):
+    center = np.mean(peaks, axis=0)
+    origin = peaks[np.argmin([np.linalg.norm(p - center) for p in peaks])]
+
+    greater_x = [p for p in peaks if p[0] > origin[0]]
+    greater_y = [p for p in peaks if p[1] > origin[1]]
+
+    i1 = np.argmin([(x[0] - origin[0])**2 + 2*(x[1] - origin[1])**2 for x in greater_x])
+    vec1 = greater_x[i1] - origin
+
+    i2 = np.argmin([2*(x[0] - origin[0])**2 + (x[1] - origin[1])**2 for x in greater_y])
+    vec2 = greater_y[i2] - origin
+
+    matrix = np.stack([vec1, vec2], axis=1)
+    if np.linalg.det(matrix) < 0:
+        matrix= matrix[:, ::-1]
+
+    return matrix
+
+
+# this is really annoying
+def sort_peaks(peaks: np.ndarray, show: bool = True):
+    skewer = get_skewing_matrix(peaks)
+    peaks_unskewed = peaks@np.linalg.inv(skewer).T
+    peak_coords_flattened = peaks_unskewed[:, 0] - 2e-1*peaks_unskewed[:, 1]
+    #permutation = np.lexsort((peaks_unskewed[:, 1], peaks_unskewed[:, 0]))
+    permutation = np.argsort(peak_coords_flattened)
+    if show:
+        peaks_unskewed = peaks_unskewed[permutation]
+        plt.scatter(peaks_unskewed[:, 0], peaks_unskewed[:, 1])
+        for i, (xi, yi) in enumerate(peaks_unskewed):
+            plt.annotate(str(i), (xi, yi),
+                          xytext=(5, 5),  # Offset label slightly from point
+                          textcoords='offset points',
+                          fontsize=9,
+                          bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.7))
+
+        plt.show()
+    return peaks[permutation]
+
+    thresh = np.percentile(np.abs(np.subtract.outer(peaks_unskewed[:, 0], peaks_unskewed[:, 0])), 20)
+    x_vals = [peaks_unskewed[0, 0]]
+    peaks_list = [[]]
+    for j, peak in enumerate(peaks_unskewed):
+        assigned = False
+        for i, x_val in enumerate(x_vals):
+            if np.abs(peak[0] - x_val) < thresh:
+                peaks_list[i].append(peaks[j])
+                assigned = True
+                break
+        if not assigned:
+            x_vals.append(peaks[j, 0])
+            peaks_list.append([peaks[j]])
+
+    peaks_list_perms = [np.argsort([p[1] for p in ps]) for ps in peaks_list]
+    peaks_list = [np.array(ps)[perm] for ps, perm in zip(peaks_list, peaks_list_perms)]
+    peaks_order = np.argsort(x_vals)
+    try:
+        peaks = np.stack(peaks_list, axis=0)[peaks_order]
+    except:
+        print([ps.shape for ps in peaks])
+
+    return peaks.reshape((-1, 2))
 
 
 def detect_peaks_from_frames(frame_name: str, grid_size: int, show: bool = True) -> Tuple[np.ndarray, np.ndarray]:
     frame = np.load(frame_name)
 
     # expect only green to be active
-    frame_l = frame[:640, :, 1].T
-    frame_r = frame[640:, :, 1].T
+    frame_l = frame[:640, :, 1]
+    frame_r = frame[640:, :, 1]
 
     peaks_l = locate_peaks(frame_l, grid_size)
     peaks_r = locate_peaks(frame_r, grid_size)
@@ -80,12 +145,16 @@ def detect_peaks_from_frames(frame_name: str, grid_size: int, show: bool = True)
 
     # need to sort them so that it is easy to locate each one in world space
     # this is a bit hacky but i dont see a better way to do it at the moment
+    """
     peaks_l_flat_coords = peaks_l[:, 1] + 0.1*peaks_l[:, 0]
     peaks_l_perm = np.argsort(peaks_l_flat_coords)
     peaks_l = peaks_l[peaks_l_perm]
     peaks_r_flat_coords = peaks_r[:, 1] + 0.1*peaks_r[:, 0]
     peaks_r_perm = np.argsort(peaks_r_flat_coords)
     peaks_r = peaks_r[peaks_r_perm]
+    """
+    peaks_l = sort_peaks(peaks_l, show=show)
+    peaks_r = sort_peaks(peaks_r, show=show)
 
     if show:
         fig = plt.figure()
@@ -224,7 +293,7 @@ def calibrate_from_pixel_peaks(peak_files_l: List[str],
     np.save(os.path.join(save_to_folder, "fundamental.npy"), fundamental)
 
 
-def verify_epipolar_geometry(frame_path: str, calib_data_folder: str):
+def verify_epipolar_geometry(frame_path: str, calib_data_folder: str, n_grid_points: int):
     """Check if epipolar constraint holds with your calibration"""
     frame = np.load(frame_path)
     frame_l = frame[:640, :, 1].T
@@ -239,8 +308,8 @@ def verify_epipolar_geometry(frame_path: str, calib_data_folder: str):
     essential = np.load(os.path.join(calib_data_folder, "essential.npy"))
 
     # Detect a few points to test
-    peaks_l = locate_peaks(frame_l, 15)  # Get some points
-    peaks_r = locate_peaks(frame_r, 15)
+    peaks_l = locate_peaks(frame_l, n_grid_points)  # Get some points
+    peaks_r = locate_peaks(frame_r, n_grid_points)
 
     # Test epipolar constraint: x_r^T * F * x_l = 0
     errors = []
@@ -470,16 +539,16 @@ if __name__ == "__main__":
     peak_files_l = []
     peak_files_r = []
     for ff in frame_files:
-        peaks_l, peaks_r = detect_peaks_from_frames(ff, 15, show=False)
+        peaks_l, peaks_r = detect_peaks_from_frames(ff, 20, show=False)
         head, tail = os.path.split(ff)
-        pathl = os.path.join(head, "left_peaks_" + tail)
-        pathr = os.path.join(head, "right_peaks_" + tail)
+        pathl = os.path.join("grid_points", "left_peaks_" + tail)
+        pathr = os.path.join("grid_points", "right_peaks_" + tail)
         np.save(pathl, peaks_l)
         np.save(pathr, peaks_r)
         peak_files_l.append(pathl)
         peak_files_r.append(pathr)
     calibrate_from_pixel_peaks(
-        peak_files_l, peak_files_r, 0.076, (3, 5), "calibration_data", show=False)
+        peak_files_l, peak_files_r, 0.215, (4, 5), "calibration_data", show=True)
 
     for ff in frame_files:
         #debug_peak_ordering(ff, (3, 5))
