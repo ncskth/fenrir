@@ -201,6 +201,8 @@ def verify_correspondences(world_points, image_peaks, title="Verification"):
 
     # Connect points in order to visualize ordering
     for i in range(len(world_points) - 1):
+        axes[0].plot([world_points[i, 0], world_points[i + 1, 0]],
+                     [world_points[i, 1], world_points[i + 1, 1]], 'r-', alpha=0.3)
         axes[1].plot([image_peaks[i, 0], image_peaks[i+1, 0]],
                     [image_peaks[i, 1], image_peaks[i+1, 1]], 'r-', alpha=0.3)
 
@@ -216,10 +218,10 @@ def create_world_points(grid_shape, grid_spacing_meters):
     rows, cols = grid_shape
     world_points = np.zeros((rows * cols, 3), dtype=np.float32)
 
-    # Row-major order: iterate rows, then columns
+    # Column-major order: iterate rows, then columns
     idx = 0
-    for r in range(rows):  # y coordinate (row)
-        for c in range(cols):  # x coordinate (column)
+    for c in range(cols):  # y coordinate (row)
+        for r in range(rows):  # x coordinate (column)
             world_points[idx, 0] = c * grid_spacing_meters  # x
             world_points[idx, 1] = r * grid_spacing_meters  # y
             world_points[idx, 2] = 0
@@ -255,8 +257,9 @@ def calibrate_from_pixel_peaks(peak_files_l: List[str],
 
     # Verify first set of correspondences
     if show:
-        verify_correspondences(world_points, peaks_l[0], "Left Camera")
-        verify_correspondences(world_points, peaks_r[0], "Right Camera")
+        for i in range(len(peaks_l)):
+            verify_correspondences(world_points, peaks_l[i], f"Left Camera {peak_files_l[i]}")
+            verify_correspondences(world_points, peaks_r[i], f"Right Camera {peak_files_r[i]}")
 
     _, camera_matrix_l, distortion_coeffs_l, _, _ = cv2.calibrateCamera(
         world_points_copied, peaks_l, (640, 480), None, None)
@@ -280,6 +283,8 @@ def calibrate_from_pixel_peaks(peak_files_l: List[str],
                                                      (640, 480),
                                                      criteria=criteria,
                                                      flags=flags)
+    #rotation = np.eye(3)
+    #translation = np.array([0.11, 0, 0])
 
     np.save(os.path.join(save_to_folder, "cam_mat_l.npy"), camera_matrix_l)
     np.save(os.path.join(save_to_folder, "cam_mat_r.npy"), camera_matrix_r)
@@ -289,15 +294,15 @@ def calibrate_from_pixel_peaks(peak_files_l: List[str],
             distortion_coeffs_r)
     np.save(os.path.join(save_to_folder, "rotation.npy"), rotation)
     np.save(os.path.join(save_to_folder, "translation.npy"), translation)
-    np.save(os.path.join(save_to_folder, "essential.npy"), essential)
-    np.save(os.path.join(save_to_folder, "fundamental.npy"), fundamental)
+    #np.save(os.path.join(save_to_folder, "essential.npy"), essential)
+    #np.save(os.path.join(save_to_folder, "fundamental.npy"), fundamental)
 
 
 def verify_epipolar_geometry(frame_path: str, calib_data_folder: str, n_grid_points: int):
     """Check if epipolar constraint holds with your calibration"""
     frame = np.load(frame_path)
-    frame_l = frame[:640, :, 1].T
-    frame_r = frame[640:, :, 1].T
+    frame_l = frame[:640, :, 1]
+    frame_r = frame[640:, :, 1]
 
     # Load calibration
     cam_mat_l = np.load(os.path.join(calib_data_folder, "cam_mat_l.npy"))
@@ -336,8 +341,8 @@ def test_stereo_calibration(frame_path: str, calib_data_folder: str):
     frame = np.load(frame_path)
 
     # Extract and process - KEEP TRANSPOSED (same as detection)
-    frame_l_raw = frame[:640, :, 1].T  # Shape (640, 480)
-    frame_r_raw = frame[640:, :, 1].T  # Shape (640, 480)
+    frame_l_raw = frame[:640, :, 1]  # Shape (640, 480)
+    frame_r_raw = frame[640:, :, 1]  # Shape (640, 480)
 
     # Apply Gaussian blur
     frame_l = gaussian(frame_l_raw, sigma=3)
@@ -347,26 +352,38 @@ def test_stereo_calibration(frame_path: str, calib_data_folder: str):
     frame_l = (frame_l / frame_l.max() * 255).astype(np.uint8)
     frame_r = (frame_r / frame_r.max() * 255).astype(np.uint8)
 
-    h, w = frame_l.shape  # h=480, w=640
+    w, h = frame_l.shape  # h=480, w=640
 
     # Load calibration
     cam_mat_l = np.load(os.path.join(calib_data_folder, "cam_mat_l.npy"))
     cam_mat_r = np.load(os.path.join(calib_data_folder, "cam_mat_r.npy"))
     dist_coeffs_l = np.load(os.path.join(calib_data_folder, "dist_coeffs_l.npy"))
     dist_coeffs_r = np.load(os.path.join(calib_data_folder, "dist_coeffs_r.npy"))
-    #rotation = np.load(os.path.join(calib_data_folder, "rotation.npy"))
-    #translation = np.load(os.path.join(calib_data_folder, "translation.npy"))
+    rotation = np.load(os.path.join(calib_data_folder, "rotation.npy"))
+    translation = np.load(os.path.join(calib_data_folder, "translation.npy"))
+    """
+    rotation = np.eye(3)
+    translation = np.array([0.11, 0, 0])
+    dist_coeffs_l = np.zeros_like(dist_coeffs_l)
+    dist_coeffs_r = np.zeros_like(dist_coeffs_r)
+    cam_mat_l[0, 2] = 320
+    cam_mat_r[0, 2] = 320
+    cam_mat_l[1, 2] = 240
+    cam_mat_r[1, 2] = 240
+    """
 
     print(f"Image shape: {h}x{w}")
-    print(f"Camera matrix shape: {cam_mat_l.shape}")
-    #print(f"Translation: {translation}")
+    print(f"Camera matrix left:\n {cam_mat_l}")
+    print(f"Camera matrix right:\n {cam_mat_r}")
+    print(f"Translation:\n {translation}")
+    print((f"Rotation:\n {rotation}"))
 
     # Stereo rectification
     #rectification_flags = cv2.CALIB_ZERO_DISPARITY
     R1, R2, P1, P2, Q, roi1, roi2 = cv2.stereoRectify(
         cam_mat_l, dist_coeffs_l,
         cam_mat_r, dist_coeffs_r,
-        (w, h), np.eye(3), np.array([0.11, 0, 0]),  # (640, 480) for transposed images
+        (w, h), rotation, translation,  # (640, 480) for transposed images
         alpha=0
     )
 
@@ -387,8 +404,8 @@ def test_stereo_calibration(frame_path: str, calib_data_folder: str):
     print(f"Map2_left range: [{map2_left.min():.1f}, {map2_left.max():.1f}]")
 
     # Apply rectification
-    rectified_l = cv2.remap(frame_l, map1_left, map2_left, cv2.INTER_LINEAR)
-    rectified_r = cv2.remap(frame_r, map1_right, map2_right, cv2.INTER_LINEAR)
+    rectified_l = cv2.remap(frame_l.T, map1_left, map2_left, cv2.INTER_LINEAR)
+    rectified_r = cv2.remap(frame_r.T, map1_right, map2_right, cv2.INTER_LINEAR)
 
     print(f"Rectified L - dtype: {rectified_l.dtype}, min: {rectified_l.min()}, max: {rectified_l.max()}")
     print(f"Rectified R - dtype: {rectified_r.dtype}, min: {rectified_r.min()}, max: {rectified_r.max()}")
@@ -396,11 +413,11 @@ def test_stereo_calibration(frame_path: str, calib_data_folder: str):
     # Display WITHOUT additional transpose (images are already correct orientation)
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
-    axes[0,0].imshow(frame_l, cmap='gray')
+    axes[0,0].imshow(frame_l.T, cmap='gray')
     axes[0,0].set_title("Left unrectified")
     axes[0,0].axis('off')
 
-    axes[0,1].imshow(frame_r, cmap='gray')
+    axes[0,1].imshow(frame_r.T, cmap='gray')
     axes[0,1].set_title("Right unrectified")
     axes[0,1].axis('off')
 
@@ -431,7 +448,7 @@ def test_both_mono_calibrations(frame_path: str, calib_data_folder: str):
     frame = np.load(frame_path)
 
     # Process left camera
-    frame_l_raw = frame[:640, :, 1].T
+    frame_l_raw = frame[:640, :, 1]
     frame_l_blurred = gaussian(frame_l_raw, sigma=3)
     frame_l = (frame_l_blurred / frame_l_blurred.max() * 255).astype(np.uint8)
 
@@ -440,7 +457,7 @@ def test_both_mono_calibrations(frame_path: str, calib_data_folder: str):
     undistorted_l = cv2.undistort(frame_l, cam_mat_l, dist_coeffs_l)
 
     # Process right camera
-    frame_r_raw = frame[640:, :, 1].T
+    frame_r_raw = frame[640:, :, 1]
     frame_r_blurred = gaussian(frame_r_raw, sigma=3)
     frame_r = (frame_r_blurred / frame_r_blurred.max() * 255).astype(np.uint8)
 
@@ -451,19 +468,19 @@ def test_both_mono_calibrations(frame_path: str, calib_data_folder: str):
     # Display all four images
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
-    axes[0,0].imshow(frame_l, cmap='gray')
+    axes[0,0].imshow(frame_l.T, cmap='gray')
     axes[0,0].set_title("Left - Original")
     axes[0,0].axis('off')
 
-    axes[0,1].imshow(undistorted_l, cmap='gray')
+    axes[0,1].imshow(undistorted_l.T, cmap='gray')
     axes[0,1].set_title("Left - Undistorted")
     axes[0,1].axis('off')
 
-    axes[1,0].imshow(frame_r, cmap='gray')
+    axes[1,0].imshow(frame_r.T, cmap='gray')
     axes[1,0].set_title("Right - Original")
     axes[1,0].axis('off')
 
-    axes[1,1].imshow(undistorted_r, cmap='gray')
+    axes[1,1].imshow(undistorted_r.T, cmap='gray')
     axes[1,1].set_title("Right - Undistorted")
     axes[1,1].axis('off')
 
@@ -477,8 +494,8 @@ def debug_peak_ordering(frame_path: str, grid_shape: Tuple[int, int]):
     frame = np.load(frame_path)
 
     # Get peaks for both cameras
-    frame_l = frame[:640, :, 1].T
-    frame_r = frame[640:, :, 1].T
+    frame_l = frame[:640, :, 1]
+    frame_r = frame[640:, :, 1]
 
     peaks_l = locate_peaks(frame_l, grid_shape[0] * grid_shape[1])
     peaks_r = locate_peaks(frame_r, grid_shape[0] * grid_shape[1])
@@ -496,7 +513,7 @@ def debug_peak_ordering(frame_path: str, grid_shape: Tuple[int, int]):
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
     # Left camera with peak numbers
-    axes[0].imshow(frame_l, cmap='gray')
+    axes[0].imshow(frame_l.T, cmap='gray')
     axes[0].set_title("Left Camera - Peak Ordering")
     for i, (x, y) in enumerate(peaks_l):
         axes[0].plot(x, y, 'ro', markersize=6)
@@ -508,7 +525,7 @@ def debug_peak_ordering(frame_path: str, grid_shape: Tuple[int, int]):
                     [peaks_l[i,1], peaks_l[i+1,1]], 'b-', alpha=0.3)
 
     # Right camera with peak numbers
-    axes[1].imshow(frame_r, cmap='gray')
+    axes[1].imshow(frame_r.T, cmap='gray')
     axes[1].set_title("Right Camera - Peak Ordering")
     for i, (x, y) in enumerate(peaks_r):
         axes[1].plot(x, y, 'bo', markersize=6)
@@ -551,7 +568,7 @@ if __name__ == "__main__":
         peak_files_l, peak_files_r, 0.215, (4, 5), "calibration_data", show=True)
 
     for ff in frame_files:
-        #debug_peak_ordering(ff, (3, 5))
-        verify_epipolar_geometry(ff, "calibration_data")
+        #`debug_peak_ordering(ff, (4, 5))
+        verify_epipolar_geometry(ff, "calibration_data", 20)
         test_both_mono_calibrations(ff, "calibration_data")
         test_stereo_calibration(ff, "calibration_data")
