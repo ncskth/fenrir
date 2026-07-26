@@ -9,7 +9,10 @@ from scipy.ndimage import center_of_mass
 
 from typing import *
 
-frame_files = [os.path.join("calibration_frames", f) for f in os.listdir("calibration_frames")]
+frames = [30]
+frame_files = [(f"mimir_jr_calibration_frames/frame_left_{i}.npy", f"mimir_jr_calibration_frames/frame_right_{i}.npy") for i in frames]
+frame_files = [ff for ff in frame_files if os.path.exists(ff[0]) and os.path.exists(ff[1])]
+print(len(frame_files))
 
 
 def adaptive_peak_finder(img: np.ndarray, n_expected_peaks: int):
@@ -46,11 +49,12 @@ def adaptive_peak_finder(img: np.ndarray, n_expected_peaks: int):
     return peaks
 
 
-def locate_peaks(event_frame: np.ndarray, grid_size: int):
-    frame_clipped = np.clip(event_frame, 0, 1)
+def locate_peaks(event_frame: np.ndarray, grid_size: int, show: bool = False):
+    frame_clipped = np.where(event_frame > 20, event_frame, np.zeros_like(event_frame))
     frame_blurred = gaussian(frame_clipped, sigma=3)
-    #plt.imshow(frame_blurred.T)
-    #plt.show()
+    if show:
+        plt.imshow(frame_blurred.T)
+        plt.show()
     peaks = adaptive_peak_finder(frame_blurred, grid_size)
 
     recentered_peaks = []
@@ -88,7 +92,7 @@ def get_skewing_matrix(peaks: np.ndarray):
 def sort_peaks(peaks: np.ndarray, show: bool = True):
     skewer = get_skewing_matrix(peaks)
     peaks_unskewed = peaks@np.linalg.inv(skewer).T
-    peak_coords_flattened = peaks_unskewed[:, 0] - 2e-1*peaks_unskewed[:, 1]
+    peak_coords_flattened = peaks_unskewed[:, 0] - 0.1*peaks_unskewed[:, 1]
     #permutation = np.lexsort((peaks_unskewed[:, 1], peaks_unskewed[:, 0]))
     permutation = np.argsort(peak_coords_flattened)
     if show:
@@ -104,55 +108,17 @@ def sort_peaks(peaks: np.ndarray, show: bool = True):
         plt.show()
     return peaks[permutation]
 
-    thresh = np.percentile(np.abs(np.subtract.outer(peaks_unskewed[:, 0], peaks_unskewed[:, 0])), 20)
-    x_vals = [peaks_unskewed[0, 0]]
-    peaks_list = [[]]
-    for j, peak in enumerate(peaks_unskewed):
-        assigned = False
-        for i, x_val in enumerate(x_vals):
-            if np.abs(peak[0] - x_val) < thresh:
-                peaks_list[i].append(peaks[j])
-                assigned = True
-                break
-        if not assigned:
-            x_vals.append(peaks[j, 0])
-            peaks_list.append([peaks[j]])
 
-    peaks_list_perms = [np.argsort([p[1] for p in ps]) for ps in peaks_list]
-    peaks_list = [np.array(ps)[perm] for ps, perm in zip(peaks_list, peaks_list_perms)]
-    peaks_order = np.argsort(x_vals)
-    try:
-        peaks = np.stack(peaks_list, axis=0)[peaks_order]
-    except:
-        print([ps.shape for ps in peaks])
+def detect_peaks_from_frames(frame_names: Tuple[str, str], grid_size: int, show: bool = True) -> Tuple[np.ndarray, np.ndarray]:
+    frame_l = np.load(frame_names[0])
+    frame_r = np.load(frame_names[1])
 
-    return peaks.reshape((-1, 2))
-
-
-def detect_peaks_from_frames(frame_name: str, grid_size: int, show: bool = True) -> Tuple[np.ndarray, np.ndarray]:
-    frame = np.load(frame_name)
-
-    # expect only green to be active
-    frame_l = frame[:640, :, 1]
-    frame_r = frame[640:, :, 1]
-
-    peaks_l = locate_peaks(frame_l, grid_size)
-    peaks_r = locate_peaks(frame_r, grid_size)
+    peaks_l = locate_peaks(frame_l, grid_size, show=show)
+    peaks_r = locate_peaks(frame_r, grid_size, show=show)
 
     # should probably be 25 peaks each (unless calibrator display was changed)
     #print(f"Left peaks: {len(peaks_l)}")
     #print(f"Right peaks: {len(peaks_r)}")
-
-    # need to sort them so that it is easy to locate each one in world space
-    # this is a bit hacky but i dont see a better way to do it at the moment
-    """
-    peaks_l_flat_coords = peaks_l[:, 1] + 0.1*peaks_l[:, 0]
-    peaks_l_perm = np.argsort(peaks_l_flat_coords)
-    peaks_l = peaks_l[peaks_l_perm]
-    peaks_r_flat_coords = peaks_r[:, 1] + 0.1*peaks_r[:, 0]
-    peaks_r_perm = np.argsort(peaks_r_flat_coords)
-    peaks_r = peaks_r[peaks_r_perm]
-    """
     peaks_l = sort_peaks(peaks_l, show=show)
     peaks_r = sort_peaks(peaks_r, show=show)
 
@@ -301,8 +267,8 @@ def calibrate_from_pixel_peaks(peak_files_l: List[str],
 def verify_epipolar_geometry(frame_path: str, calib_data_folder: str, n_grid_points: int):
     """Check if epipolar constraint holds with your calibration"""
     frame = np.load(frame_path)
-    frame_l = frame[:640, :, 1]
-    frame_r = frame[640:, :, 1]
+    frame_l = frame[:640]
+    frame_r = frame[640:]
 
     # Load calibration
     cam_mat_l = np.load(os.path.join(calib_data_folder, "cam_mat_l.npy"))
@@ -337,12 +303,11 @@ def verify_epipolar_geometry(frame_path: str, calib_data_folder: str, n_grid_poi
     print(f"Mean F error: {np.mean(errors):.3f} (should be < 1.0)")
 
 
-def test_stereo_calibration(frame_path: str, calib_data_folder: str):
-    frame = np.load(frame_path)
+def test_stereo_calibration(frame_paths: Tuple[str, str], calib_data_folder: str):
 
     # Extract and process - KEEP TRANSPOSED (same as detection)
-    frame_l_raw = frame[:640, :, 1]  # Shape (640, 480)
-    frame_r_raw = frame[640:, :, 1]  # Shape (640, 480)
+    frame_l_raw = np.load(frame_paths[0])
+    frame_r_raw = np.load(frame_paths[1])
 
     # Apply Gaussian blur
     frame_l = gaussian(frame_l_raw, sigma=3)
@@ -443,12 +408,12 @@ def test_stereo_calibration(frame_path: str, calib_data_folder: str):
         print("Identity remap failed - problem is in frame_l data")
 
 
-def test_both_mono_calibrations(frame_path: str, calib_data_folder: str):
+def test_both_mono_calibrations(frame_paths: Tuple[str, str], calib_data_folder: str):
     """Test both left and right camera undistortion side by side"""
-    frame = np.load(frame_path)
+    #frame = np.load(frame_path)
 
     # Process left camera
-    frame_l_raw = frame[:640, :, 1]
+    frame_l_raw = np.load(frame_paths[0])
     frame_l_blurred = gaussian(frame_l_raw, sigma=3)
     frame_l = (frame_l_blurred / frame_l_blurred.max() * 255).astype(np.uint8)
 
@@ -457,7 +422,7 @@ def test_both_mono_calibrations(frame_path: str, calib_data_folder: str):
     undistorted_l = cv2.undistort(frame_l, cam_mat_l, dist_coeffs_l)
 
     # Process right camera
-    frame_r_raw = frame[640:, :, 1]
+    frame_r_raw = np.load(frame_paths[1])
     frame_r_blurred = gaussian(frame_r_raw, sigma=3)
     frame_r = (frame_r_blurred / frame_r_blurred.max() * 255).astype(np.uint8)
 
@@ -494,8 +459,8 @@ def debug_peak_ordering(frame_path: str, grid_shape: Tuple[int, int]):
     frame = np.load(frame_path)
 
     # Get peaks for both cameras
-    frame_l = frame[:640, :, 1]
-    frame_r = frame[640:, :, 1]
+    frame_l = frame[:640]
+    frame_r = frame[640:]
 
     peaks_l = locate_peaks(frame_l, grid_shape[0] * grid_shape[1])
     peaks_r = locate_peaks(frame_r, grid_shape[0] * grid_shape[1])
@@ -553,22 +518,28 @@ def debug_peak_ordering(frame_path: str, grid_shape: Tuple[int, int]):
 
 if __name__ == "__main__":
 
+
     peak_files_l = []
     peak_files_r = []
     for ff in frame_files:
-        peaks_l, peaks_r = detect_peaks_from_frames(ff, 20, show=False)
-        head, tail = os.path.split(ff)
-        pathl = os.path.join("grid_points", "left_peaks_" + tail)
-        pathr = os.path.join("grid_points", "right_peaks_" + tail)
+        print(ff)
+        peaks_l, peaks_r = detect_peaks_from_frames(ff, 25, show=True)
+        _, tail_left = os.path.split(ff[0])
+        _, tail_right = os.path.split(ff[1])
+        pathl = os.path.join("grid_points", "peaks_" + tail_left)
+        pathr = os.path.join("grid_points", "peaks_" + tail_right)
         np.save(pathl, peaks_l)
         np.save(pathr, peaks_r)
         peak_files_l.append(pathl)
         peak_files_r.append(pathr)
+
+    peak_files_l = [os.path.join("grid_points", f) for f in os.listdir("grid_points") if 'left' in f]
+    peak_files_r = [os.path.join("grid_points", f) for f in os.listdir("grid_points") if 'right' in f]
     calibrate_from_pixel_peaks(
-        peak_files_l, peak_files_r, 0.215, (4, 5), "calibration_data", show=True)
+        peak_files_l, peak_files_r, 0.04, (5, 5), "mimir_jr_calibration_data", show=True)
 
     for ff in frame_files:
         #`debug_peak_ordering(ff, (4, 5))
-        verify_epipolar_geometry(ff, "calibration_data", 20)
-        test_both_mono_calibrations(ff, "calibration_data")
-        test_stereo_calibration(ff, "calibration_data")
+        #verify_epipolar_geometry(ff, "calibration_data", 20)
+        test_both_mono_calibrations(ff, "mimir_jr_calibration_data")
+        test_stereo_calibration(ff, "mimir_jr_calibration_data")
