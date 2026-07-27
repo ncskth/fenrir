@@ -9,9 +9,11 @@ from scipy.ndimage import center_of_mass
 
 from typing import *
 
-frames = [30]
+frames = [i for i in range(51)]
 frame_files = [(f"mimir_jr_calibration_frames/frame_left_{i}.npy", f"mimir_jr_calibration_frames/frame_right_{i}.npy") for i in frames]
 frame_files = [ff for ff in frame_files if os.path.exists(ff[0]) and os.path.exists(ff[1])]
+for ff in frame_files:
+    assert np.any(np.load(ff[0]) != np.load(ff[1]))
 print(len(frame_files))
 
 
@@ -59,9 +61,9 @@ def locate_peaks(event_frame: np.ndarray, grid_size: int, show: bool = False):
 
     recentered_peaks = []
     for peak in peaks:
-        x = peak[0] - 3
-        y = peak[1] - 3
-        center = center_of_mass(frame_blurred[x : x + 7, y : y + 7])
+        x = peak[0] - 5
+        y = peak[1] - 5
+        center = center_of_mass(frame_blurred[x : x + 11, y : y + 11])
         recentered_peaks.append(np.array([x + center[0], y + center[1]]))
 
     return np.array(recentered_peaks)
@@ -112,6 +114,7 @@ def sort_peaks(peaks: np.ndarray, show: bool = True):
 def detect_peaks_from_frames(frame_names: Tuple[str, str], grid_size: int, show: bool = True) -> Tuple[np.ndarray, np.ndarray]:
     frame_l = np.load(frame_names[0])
     frame_r = np.load(frame_names[1])
+    assert np.any(frame_l != frame_r)
 
     peaks_l = locate_peaks(frame_l, grid_size, show=show)
     peaks_r = locate_peaks(frame_r, grid_size, show=show)
@@ -209,6 +212,7 @@ def calibrate_from_pixel_peaks(peak_files_l: List[str],
     for f_l, f_r in zip(peak_files_l, peak_files_r):
         p_l = np.load(f_l).astype(np.float32)
         p_r = np.load(f_r).astype(np.float32)
+        assert np.any(p_l != p_r)
 
         # Sort peaks to match world point order
         #p_l_sorted = sort_peaks_grid_order(p_l, grid_shape)
@@ -233,8 +237,11 @@ def calibrate_from_pixel_peaks(peak_files_l: List[str],
         world_points_copied, peaks_r, (640, 480), None, None)
 
     # Stereo calibration with proper flags
-    flags = 0 # Use individual calibration results
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-5)
+    flags = cv2.CALIB_FIX_INTRINSIC # Use individual calibration results
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 2400, 1e-7)
+
+    R_init = np.eye(3, dtype=np.float64)
+    T_init = np.array([[0.11], [0], [0]], dtype=np.float64)
 
     _, camera_matrix_l, distortion_coeffs_l, \
         camera_matrix_r, distortion_coeffs_r, \
@@ -249,8 +256,8 @@ def calibrate_from_pixel_peaks(peak_files_l: List[str],
                                                      (640, 480),
                                                      criteria=criteria,
                                                      flags=flags)
-    #rotation = np.eye(3)
-    #translation = np.array([0.11, 0, 0])
+    rotation = R_init
+    translation = T_init
 
     np.save(os.path.join(save_to_folder, "cam_mat_l.npy"), camera_matrix_l)
     np.save(os.path.join(save_to_folder, "cam_mat_r.npy"), camera_matrix_r)
@@ -518,25 +525,27 @@ def debug_peak_ordering(frame_path: str, grid_shape: Tuple[int, int]):
 
 if __name__ == "__main__":
 
-
+    """
     peak_files_l = []
     peak_files_r = []
     for ff in frame_files:
         print(ff)
-        peaks_l, peaks_r = detect_peaks_from_frames(ff, 25, show=True)
+        peaks_l, peaks_r = detect_peaks_from_frames(ff, 25, show=False)
         _, tail_left = os.path.split(ff[0])
         _, tail_right = os.path.split(ff[1])
         pathl = os.path.join("grid_points", "peaks_" + tail_left)
         pathr = os.path.join("grid_points", "peaks_" + tail_right)
+        assert np.any(peaks_l != peaks_r)
         np.save(pathl, peaks_l)
         np.save(pathr, peaks_r)
         peak_files_l.append(pathl)
         peak_files_r.append(pathr)
+    """
 
     peak_files_l = [os.path.join("grid_points", f) for f in os.listdir("grid_points") if 'left' in f]
     peak_files_r = [os.path.join("grid_points", f) for f in os.listdir("grid_points") if 'right' in f]
     calibrate_from_pixel_peaks(
-        peak_files_l, peak_files_r, 0.04, (5, 5), "mimir_jr_calibration_data", show=True)
+        peak_files_l, peak_files_r, 0.04, (5, 5), "mimir_jr_calibration_data", show=False)
 
     for ff in frame_files:
         #`debug_peak_ordering(ff, (4, 5))
