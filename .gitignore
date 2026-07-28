@@ -2,3 +2,4 @@ mimir_jr_calibration_frames
 *.mp4
 __pycache__
 grid_points
+build

@@ -47,10 +47,10 @@ low_pass_right = dv.noise.LowPassFilter((640, 480), 500)
 # hot pixel filter
 mask_left = 255*np.ones((640, 480), dtype=np.uint8)
 mask_right = 255*np.ones((640, 480), dtype=np.uint8)
-hot_pixels_left_x = np.load("hot_pixels_left_x.npy")
-hot_pixels_left_y = np.load("hot_pixels_left_y.npy")
-hot_pixels_right_x = np.load("hot_pixels_right_x.npy")
-hot_pixels_right_y = np.load("hot_pixels_right_y.npy")
+hot_pixels_left_x = np.load("hot_pixels_mimir_jr/hot_pixels_left_x.npy")
+hot_pixels_left_y = np.load("hot_pixels_mimir_jr/hot_pixels_left_y.npy")
+hot_pixels_right_x = np.load("hot_pixels_mimir_jr/hot_pixels_right_x.npy")
+hot_pixels_right_y = np.load("hot_pixels_mimir_jr/hot_pixels_right_y.npy")
 mask_left[hot_pixels_left_x, hot_pixels_left_y] = 0
 mask_right[hot_pixels_right_x, hot_pixels_right_y] = 0
 print(np.sum((255 - mask_left)/255))
@@ -78,8 +78,6 @@ def slicing_callback_right(events: dv.EventStore):
 # Register callback to be performed every 33 milliseconds
 slicer_left.doEveryTimeInterval(timedelta(milliseconds=30), slicing_callback_left)
 slicer_right.doEveryTimeInterval(timedelta(milliseconds=30), slicing_callback_right)
-#filter_left.doEveryTimeInterval(timedelta(milliseconds=10), slicing_callback_left)
-#filter_right.doEveryTimeInterval(timedelta(milliseconds=10), slicing_callback_right)
 
 # Run the event processing while the camera is connected
 while capture_left.isRunning() and capture_right.isRunning():
