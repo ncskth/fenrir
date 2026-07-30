@@ -1,11 +1,27 @@
-PROJECT(SlamDemo)
-ADD_SUBDIRECTORY(src)
-ADD_EXECUTABLE(SlamDemo src/slam_demo.cpp)
+cmake_minimum_required(VERSION 3.10)
+project(SlamDemo)
 
-# Find installed dv-processing.
-FIND_PACKAGE(dv-processing REQUIRED)
+find_package(dv-processing REQUIRED)
+find_package(OpenCV REQUIRED)
 
-# Link your targets against the library
-TARGET_LINK_LIBRARIES(SlamDemo PUBLIC
-                      dv::processing
-                      opencv_core)
+# Find cnpy manually
+find_path(cnpy_INCLUDE_DIR NAMES cnpy.h PATHS /usr/local/include)
+find_library(cnpy_LIBRARY NAMES cnpy PATHS /usr/local/lib)
+
+if(cnpy_INCLUDE_DIR AND cnpy_LIBRARY)
+    add_library(cnpy_imported UNKNOWN IMPORTED)
+    set_target_properties(cnpy_imported PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES ${cnpy_INCLUDE_DIR}
+        IMPORTED_LOCATION ${cnpy_LIBRARY}
+    )
+else()
+    message(FATAL_ERROR "cnpy not found")
+endif()
+
+add_executable(SlamDemo src/slam_demo.cpp)
+
+target_link_libraries(SlamDemo PUBLIC
+    dv::processing
+    opencv_core
+    cnpy_imported
+)

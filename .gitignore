@@ -3,3 +3,4 @@ mimir_jr_calibration_frames
 __pycache__
 grid_points
 build
+.vscode
