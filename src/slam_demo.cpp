@@ -65,24 +65,99 @@ int main()
     visualizer_right.setPositiveColor(dv::visualization::colors::blue);
     visualizer_right.setNegativeColor(dv::visualization::colors::green);
 
+    dv::EventPolarityFilter left_positive(true);
+    dv::EventPolarityFilter left_negative(false);
+    dv::EventPolarityFilter right_positive(true);
+    dv::EventPolarityFilter right_negative(false);
+
+    dv::Accumulator left_positive_ts(resolution);
+    left_positive_ts.setMinPotential(0.f);
+    left_positive_ts.setMaxPotential(1.f);
+    left_positive_ts.setNeutralPotential(0.f);
+    left_positive_ts.setEventContribution(1.f);
+    left_positive_ts.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
+    left_positive_ts.setDecayParam(1e+5);
+    left_positive_ts.setIgnorePolarity(true);
+    left_positive_ts.setSynchronousDecay(true);
+
+    dv::Accumulator left_negative_ts(resolution);
+    left_negative_ts.setMinPotential(0.f);
+    left_negative_ts.setMaxPotential(1.f);
+    left_negative_ts.setNeutralPotential(0.f);
+    left_negative_ts.setEventContribution(1.f);
+    left_negative_ts.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
+    left_negative_ts.setDecayParam(1e+5);
+    left_negative_ts.setIgnorePolarity(true);
+    left_negative_ts.setSynchronousDecay(true);
+
+    dv::Accumulator right_positive_ts(resolution);
+    right_positive_ts.setMinPotential(0.f);
+    right_positive_ts.setMaxPotential(1.f);
+    right_positive_ts.setNeutralPotential(0.f);
+    right_positive_ts.setEventContribution(1.f);
+    right_positive_ts.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
+    right_positive_ts.setDecayParam(1e+5);
+    right_positive_ts.setIgnorePolarity(true);
+    right_positive_ts.setSynchronousDecay(true);
+
+    dv::Accumulator right_negative_ts(resolution);
+    right_negative_ts.setMinPotential(0.f);
+    right_negative_ts.setMaxPotential(1.f);
+    right_negative_ts.setNeutralPotential(0.f);
+    right_negative_ts.setEventContribution(1.f);
+    right_negative_ts.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
+    right_negative_ts.setDecayParam(1e+5);
+    right_negative_ts.setIgnorePolarity(true);
+    right_negative_ts.setSynchronousDecay(true);
+
     // Register a callback to be done at 20Hz
-    slicer_left.doEveryTimeInterval(50ms, [&visualizer_left](const auto &leftEvents) {
-        cv::Mat left_image = visualizer_left.generateImage(leftEvents);
+    slicer_left.doEveryNumberOfElements(100000, [&left_positive_ts, &left_negative_ts, &left_positive, &left_negative](const auto &leftEvents) {
+        left_positive.accept(leftEvents);
+        const auto positive = left_positive.generateEvents();
+        //int64_t last_pos = positive.getHighestTime();
+        left_negative.accept(leftEvents);
+        const auto negative = left_negative.generateEvents();
+        //int64_t last_neg = negative.getHighestTime();
+
+        vector<cv::Mat> images(2);
+        left_positive_ts.accept(positive);
+        dv::Frame pos_frame = left_positive_ts.generateFrame();
+        images[0] = pos_frame.image;
+
+        left_negative_ts.accept(negative);
+        dv::Frame neg_frame = left_negative_ts.generateFrame();
+        images[1] = neg_frame.image;
+
+        cv::Mat left_image;
+        cv::hconcat(images, left_image);
         cv::imshow("Left", left_image);
         cv::waitKey(2);
     });
-    slicer_right.doEveryTimeInterval(50ms, [&visualizer_right](const auto &rightEvents) {
-        cv::Mat right_image = visualizer_right.generateImage(rightEvents);
+    slicer_right.doEveryNumberOfElements(100000, [&right_positive_ts, &right_negative_ts, &right_positive, &right_negative](const auto &rightEvents) {
+        right_positive.accept(rightEvents);
+        const auto positive = right_positive.generateEvents();
+        int64_t last_pos = positive.getHighestTime();
+        right_negative.accept(rightEvents);
+        const auto negative = right_negative.generateEvents();
+        int64_t last_neg = negative.getHighestTime();
+
+        vector<cv::Mat> images(2);
+        right_positive_ts.accept(positive);
+        dv::Frame pos_frame = right_positive_ts.generateFrame();
+        images[0] = pos_frame.image;
+
+        right_negative_ts.accept(negative);
+        dv::Frame neg_frame = right_negative_ts.generateFrame();
+        images[1] = neg_frame.image;
+
+        cv::Mat right_image;
+        cv::hconcat(images, right_image);
         cv::imshow("Right", right_image);
         cv::waitKey(2);
     });
 
-    // Buffer input events in these variables to synchronize inputs
-    //dv::EventStore leftEvents;
-    //dv::EventStore rightEvents;
-
-    dv::noise::BackgroundActivityNoiseFilter high_pass_left(resolution, 100us);
-    dv::noise::BackgroundActivityNoiseFilter high_pass_right(resolution, 100us);
+    dv::noise::BackgroundActivityNoiseFilter high_pass_left(resolution, 10us);
+    dv::noise::BackgroundActivityNoiseFilter high_pass_right(resolution, 10us);
     dv::noise::LowPassFilter low_pass_left(resolution, 500.0f);
     dv::noise::LowPassFilter low_pass_right(resolution, 500.0f);
 
@@ -90,24 +165,21 @@ int main()
     auto hot_pixels_left_y = cnpy::npy_load("/home/kadile/Projects/fenrir/hot_pixels_mimir_jr/hot_pixels_left_y.npy");
     auto hot_pixels_right_x = cnpy::npy_load("/home/kadile/Projects/fenrir/hot_pixels_mimir_jr/hot_pixels_right_x.npy");
     auto hot_pixels_right_y = cnpy::npy_load("/home/kadile/Projects/fenrir/hot_pixels_mimir_jr/hot_pixels_right_y.npy");
-
-    cv::Mat mask_left((480, 640), CV_8UC1, cv::Scalar(255));
-    cv::Mat mask_right((480, 640), CV_8UC1, cv::Scalar(255));
-
+    cv::Mat mask_left(resolution, CV_8UC1, cv::Scalar(255));
+    cv::Mat mask_right(resolution, CV_8UC1, cv::Scalar(255));
     for(size_t i = 0; i < hot_pixels_left_x.num_vals; i++) {
         int x = hot_pixels_left_x.data<int>()[i];  // Assuming int coordinates
         int y = hot_pixels_left_y.data<int>()[i];
-        mask_left.at<uchar>(y, x) = 0;  // (row, col) = (y, x)
+        mask_left.at<uchar>(x, y) = 0;  // (row, col) = (y, x)
     }
 
     for(size_t i = 0; i < hot_pixels_right_x.num_vals; i++) {
         int x = hot_pixels_right_x.data<int>()[i];
         int y = hot_pixels_right_y.data<int>()[i];
-        mask_right.at<uchar>(y, x) = 0;
+        mask_right.at<uchar>(x, y) = 0;
     }
-
-    dv::EventMaskFilter mask_filter_left(mask_left);
-    dv::EventMaskFilter mask_filter_right(mask_right);
+    dv::EventMaskFilter mask_filter_left(mask_left.t());
+    dv::EventMaskFilter mask_filter_right(mask_right.t());
 
     // Run the processing loop while both cameras are connected
     while (leftCamera->isRunning() && rightCamera->isRunning()) {
@@ -130,15 +202,6 @@ int main()
             const auto masked = mask_filter_right.generateEvents();
             slicer_right.accept(masked);
         }
-
-        // Feed the data into the slicer and reset the buffer
-        /*
-        if (!leftEvents.isEmpty() && !rightEvents.isEmpty()) {
-            slicer.accept(leftEvents, rightEvents);
-            leftEvents  = dv::EventStore();
-            rightEvents = dv::EventStore();
-        }
-        */
 
         // Wait for a small amount of time to avoid CPU overhaul
         cv::waitKey(1);

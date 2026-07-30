@@ -19,8 +19,14 @@ else()
 endif()
 
 add_executable(SlamDemo src/slam_demo.cpp)
+add_executable(CopyPaste src/inivation_copypaste.cpp)
 
 target_link_libraries(SlamDemo PUBLIC
+    dv::processing
+    opencv_core
+    cnpy_imported
+)
+target_link_libraries(CopyPaste PUBLIC
     dv::processing
     opencv_core
     cnpy_imported
