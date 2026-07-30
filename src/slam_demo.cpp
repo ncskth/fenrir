@@ -12,6 +12,7 @@
 
 #include <iostream>
 #include <condition_variable>
+#include <future>
 
 #include <cnpy.h>
 
@@ -24,7 +25,7 @@ int main()
 
     //*
     // Path to a stereo calibration file, replace with a file path on your local file system
-    const std::string calibrationFilePath = "/home/kadile/Projects/fenrir/mimir_jr_calibration.json";
+    const string calibrationFilePath = "/home/kadile/Projects/fenrir/mimir_jr_calibration.json";
 
     // Load the calibration file
     auto calibration = dv::camera::CalibrationSet::LoadFromFile(calibrationFilePath);
@@ -110,46 +111,67 @@ int main()
     right_negative_ts.setIgnorePolarity(true);
     right_negative_ts.setSynchronousDecay(true);
 
+    dv::SpeedInvariantTimeSurface speed_invariant_left(resolution);
+
     // Register a callback to be done at 20Hz
-    slicer_left.doEveryNumberOfElements(100000, [&left_positive_ts, &left_negative_ts, &left_positive, &left_negative](const auto &leftEvents) {
+    slicer_left.doEveryTimeInterval(50ms, [&left_positive_ts, &left_negative_ts, &left_positive, &left_negative, &speed_invariant_left](const auto &leftEvents) {
+
+        auto speed_invariant_future = async(launch::async, [&]() {
+            speed_invariant_left.accept(leftEvents);
+            return left_negative_ts.generateFrame();
+        });
+
+        // Start thread for negative time surface update
+        auto negative_future = async(launch::async, [&]() {
+            left_negative.accept(leftEvents);
+            const auto negative = left_negative.generateEvents();
+            left_negative_ts.accept(negative);
+            return left_negative_ts.generateFrame();
+        });
+
+        // Update positive time surface on main thread
         left_positive.accept(leftEvents);
         const auto positive = left_positive.generateEvents();
-        //int64_t last_pos = positive.getHighestTime();
-        left_negative.accept(leftEvents);
-        const auto negative = left_negative.generateEvents();
-        //int64_t last_neg = negative.getHighestTime();
-
-        vector<cv::Mat> images(2);
         left_positive_ts.accept(positive);
         dv::Frame pos_frame = left_positive_ts.generateFrame();
+
+        // Wait for negative thread to complete
+        dv::Frame neg_frame = negative_future.get();
+        dv::Frame speed_inv_frame = speed_invariant_future.get();
+
+        // Combine and display
+        vector<cv::Mat> images(3);
         images[0] = pos_frame.image;
-
-        left_negative_ts.accept(negative);
-        dv::Frame neg_frame = left_negative_ts.generateFrame();
         images[1] = neg_frame.image;
-
+        images[2] = speed_inv_frame.image;
         cv::Mat left_image;
         cv::hconcat(images, left_image);
         cv::imshow("Left", left_image);
         cv::waitKey(2);
     });
-    slicer_right.doEveryNumberOfElements(100000, [&right_positive_ts, &right_negative_ts, &right_positive, &right_negative](const auto &rightEvents) {
+    slicer_right.doEveryTimeInterval(50ms, [&right_positive_ts, &right_negative_ts, &right_positive, &right_negative](const auto &rightEvents) {
+
+        // Start thread for negative time surface update
+        auto negative_future = async(launch::async, [&]() {
+            right_negative.accept(rightEvents);
+            const auto negative = right_negative.generateEvents();
+            right_negative_ts.accept(negative);
+            return right_negative_ts.generateFrame();
+        });
+
+        // Update positive time surface on main thread
         right_positive.accept(rightEvents);
         const auto positive = right_positive.generateEvents();
-        int64_t last_pos = positive.getHighestTime();
-        right_negative.accept(rightEvents);
-        const auto negative = right_negative.generateEvents();
-        int64_t last_neg = negative.getHighestTime();
-
-        vector<cv::Mat> images(2);
         right_positive_ts.accept(positive);
         dv::Frame pos_frame = right_positive_ts.generateFrame();
+
+        // Wait for negative thread to complete
+        dv::Frame neg_frame = negative_future.get();
+
+        // Combine and display
+        vector<cv::Mat> images(2);
         images[0] = pos_frame.image;
-
-        right_negative_ts.accept(negative);
-        dv::Frame neg_frame = right_negative_ts.generateFrame();
         images[1] = neg_frame.image;
-
         cv::Mat right_image;
         cv::hconcat(images, right_image);
         cv::imshow("Right", right_image);
