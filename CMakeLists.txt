@@ -19,6 +19,7 @@ else()
 endif()
 
 add_executable(SlamDemo src/slam_demo.cpp)
+target_include_directories(SlamDemo PRIVATE src)
 add_executable(CopyPaste src/inivation_copypaste.cpp)
 
 target_link_libraries(SlamDemo PUBLIC

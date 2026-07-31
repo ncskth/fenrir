@@ -16,7 +16,7 @@
 
 #include <cnpy.h>
 
-//#include <image_representation.cpp>
+#include <image_representation.cpp>
 
 int main()
 {
@@ -97,7 +97,7 @@ int main()
     right_positive_ts.setNeutralPotential(0.f);
     right_positive_ts.setEventContribution(1.f);
     right_positive_ts.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
-    right_positive_ts.setDecayParam(1e+5);
+    right_positive_ts.setDecayParam(3e+4);
     right_positive_ts.setIgnorePolarity(true);
     right_positive_ts.setSynchronousDecay(true);
 
@@ -107,18 +107,19 @@ int main()
     right_negative_ts.setNeutralPotential(0.f);
     right_negative_ts.setEventContribution(1.f);
     right_negative_ts.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
-    right_negative_ts.setDecayParam(1e+5);
+    right_negative_ts.setDecayParam(3e+4);
     right_negative_ts.setIgnorePolarity(true);
     right_negative_ts.setSynchronousDecay(true);
 
     dv::SpeedInvariantTimeSurface speed_invariant_left(resolution);
 
     // Register a callback to be done at 20Hz
-    slicer_left.doEveryTimeInterval(50ms, [&left_positive_ts, &left_negative_ts, &left_positive, &left_negative, &speed_invariant_left](const auto &leftEvents) {
+    slicer_left.doEveryTimeInterval(50ms, [&resolution, &left_positive_ts, &left_negative_ts, &left_positive, &left_negative, &speed_invariant_left](const auto &leftEvents) {
 
         auto speed_invariant_future = async(launch::async, [&]() {
-            speed_invariant_left.accept(leftEvents);
-            return left_negative_ts.generateFrame();
+            //speed_invariant_left.accept(leftEvents);
+            //return speed_invariant_left.generateFrame();
+            return adaptiveAccumulation(resolution, 8, 6, leftEvents.eigen());
         });
 
         // Start thread for negative time surface update
@@ -137,13 +138,13 @@ int main()
 
         // Wait for negative thread to complete
         dv::Frame neg_frame = negative_future.get();
-        dv::Frame speed_inv_frame = speed_invariant_future.get();
+        cv::Mat speed_inv_frame = speed_invariant_future.get();
 
         // Combine and display
         vector<cv::Mat> images(3);
         images[0] = pos_frame.image;
         images[1] = neg_frame.image;
-        images[2] = speed_inv_frame.image;
+        images[2] = speed_inv_frame;
         cv::Mat left_image;
         cv::hconcat(images, left_image);
         cv::imshow("Left", left_image);
@@ -226,7 +227,7 @@ int main()
         }
 
         // Wait for a small amount of time to avoid CPU overhaul
-        cv::waitKey(1);
+        //cv::waitKey(1);
     }
     //*/
     return 0;
