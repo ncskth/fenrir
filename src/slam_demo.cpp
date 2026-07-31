@@ -119,7 +119,7 @@ int main()
         auto speed_invariant_future = async(launch::async, [&]() {
             //speed_invariant_left.accept(leftEvents);
             //return speed_invariant_left.generateFrame();
-            return adaptiveAccumulation(resolution, 8, 6, leftEvents.eigen());
+            return adaptiveAccumulation(resolution, 8, 6, leftEvents);
         });
 
         // Start thread for negative time surface update
@@ -143,7 +143,7 @@ int main()
         // Combine and display
         vector<cv::Mat> images(3);
         images[0] = pos_frame.image;
-        images[1] = neg_frame.image;
+        images[1] = cv::Scalar(255) - neg_frame.image;
         images[2] = speed_inv_frame;
         cv::Mat left_image;
         cv::hconcat(images, left_image);
@@ -172,7 +172,7 @@ int main()
         // Combine and display
         vector<cv::Mat> images(2);
         images[0] = pos_frame.image;
-        images[1] = neg_frame.image;
+        images[1] = cv::Scalar(255) - neg_frame.image;
         cv::Mat right_image;
         cv::hconcat(images, right_image);
         cv::imshow("Right", right_image);

@@ -16,9 +16,9 @@ cv::Mat adaptiveAccumulation(cv::Size resolution,
                              int y_patches,
                              //cv::Array undistort_map1,
                              //cv::Array undistort_map2,
-                             const dv::EigenEvents events) {
+                             const dv::EventStore events) {
 
-    int n_events = events.timestamps.rows();
+    int n_events = events.size();
 
     cv::Mat representation_AA = cv::Mat::zeros(resolution, CV_8U);   //for temporal stereo matching
     cv::Mat AA_frequency = cv::Mat::zeros(resolution, CV_8U);   //for point sampling
@@ -36,9 +36,9 @@ cv::Mat adaptiveAccumulation(cv::Size resolution,
     // calculate the final activity by all events, also can be estimated by eq. 3 in the paper
     for (size_t i = 0; i < n_events; i++)
     {
-        int64_t ts = events.timestamps(i, 0);
-        int16_t ex = events.coordinates(i, 0);
-        int16_t ey = events.coordinates(i, 1);
+        int64_t ts = events[i].timestamp();
+        int16_t ex = events[i].x();
+        int16_t ey = events[i].y();
         ////cout << "height " << resolution.height << endl;
         ////cout << "width " << resolution.width << endl;
         //cout << "e.y " << ey << endl;
@@ -65,9 +65,9 @@ cv::Mat adaptiveAccumulation(cv::Size resolution,
     fill(last_event_time.begin(), last_event_time.end(), 0);
     for (int i = n_events - 1; i >= 0; i--) // traverse events in reverse to accumulate the latest events
     {
-        int64_t ts = events.timestamps(i, 0);
-        int16_t ex = events.coordinates(i, 0);
-        int16_t ey = events.coordinates(i, 1);
+        int64_t ts = events[i].timestamp();
+        int16_t ex = events[i].x();
+        int16_t ey = events[i].y();
         //cout << "e.y " << ey << endl;
         //cout << "e.x " << ex << endl;
         int y = (int)ey / (int)ceil((double)resolution.height / (double)y_patches);
