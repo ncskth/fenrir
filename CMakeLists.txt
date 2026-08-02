@@ -18,7 +18,7 @@ else()
     message(FATAL_ERROR "cnpy not found")
 endif()
 
-add_executable(SlamDemo src/slam_demo.cpp)
+add_executable(SlamDemo src/slamDemo.cpp)
 target_include_directories(SlamDemo PRIVATE src)
 add_executable(CopyPaste src/inivation_copypaste.cpp)
 
