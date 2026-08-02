@@ -1,7 +1,12 @@
+#include <dv-processing/io/camera/discovery.hpp>
+#include <dv-processing/visualization/event_visualizer.hpp>
 #include <dv-processing/data/generate.hpp>
 #include <dv-processing/noise/background_activity_noise_filter.hpp>
 #include <dv-processing/noise/frequency_filters.hpp>
 #include <dv-processing/core/core.hpp>
+#include <dv-processing/camera/calibration_set.hpp>
+#include <dv-processing/core/stereo_event_stream_slicer.hpp>
+#include <dv-processing/depth/semi_dense_stereo_matcher.hpp>
 
 #include <opencv2/highgui.hpp>
 
@@ -132,38 +137,100 @@ public:
     }
 };
 
-void imageRepresentationCallback(bool is_left,
-                                 cv::Size resolution,
-                                 SafeQueue<dv::EventStore>& events_in,
-                                 SafeQueue<dv::EventStore>& events_out,
-                                 condition_variable& cv,
-                                 mutex& mtx,
-                                 bool& ready_flag
+vector<cv::Mat> leftImageRepresentation(const cv::Size resolution,
+                                        auto& positive,
+                                        auto& negative,
+                                        dv::Accumulator& positiveTS,
+                                        dv::Accumulator& negativeTS,
+                                        dv::EventStore& events) {
+        auto aaFuture = async(launch::async, [&]() {
+            return adaptiveAccumulation(resolution, 8, 6, events);
+        });
+        auto negFuture = async(launch::async, [&]() {
+            negative.accept(events);
+            const auto negativeEvents = negative.generateEvents();
+            negativeTS.accept(negativeEvents);
+            cv::Mat image = cv::Scalar(255) - negativeTS.generateFrame().image;
+            return image;
+        });
+
+        // Update positive time surface on main thread
+        positive.accept(events);
+        const auto positiveEvents = positive.generateEvents();
+        positiveTS.accept(positiveEvents);
+        cv::Mat posTS = positiveTS.generateFrame().image;
+
+        cv::Mat aa = aaFuture.get();
+        cv::Mat negTS = negFuture.get();
+
+        // Combine and display
+        vector<cv::Mat> images(3);
+        images[0] = posTS;
+        images[1] = negTS;
+        images[2] = aa;
+        return images;
+        //cv::Mat leftImage;
+        //cv::hconcat(images, leftImage);
+        //cv::imshow("Left", leftImage);
+        //cv::waitKey(2);
+}
+
+vector<cv::Mat> rightImageRepresentation(auto& positive,
+                                         auto& negative,
+                                         dv::Accumulator& positiveTS,
+                                         dv::Accumulator& negativeTS,
+                                         dv::EventStore& events) {
+        auto negFuture = async(launch::async, [&]() {
+            negative.accept(events);
+            const auto negativeEvents = negative.generateEvents();
+            negativeTS.accept(negativeEvents);
+            cv::Mat image = cv::Scalar(255) - negativeTS.generateFrame().image;
+            return image;
+        });
+
+        // Update positive time surface on main thread
+        positive.accept(events);
+        const auto positiveEvents = positive.generateEvents();
+        positiveTS.accept(positiveEvents);
+        cv::Mat posTS = positiveTS.generateFrame().image;
+
+        cv::Mat negTS = negFuture.get();
+
+        // Combine and display
+        vector<cv::Mat> images(3);
+        images[0] = posTS;
+        images[1] = negTS;
+        //cv::Mat rightImage;
+        //cv::hconcat(images, rightImage);
+        return images;
+        //cv::imshow("Right", rightImage);
+        //cv::waitKey(2);
+}
+
+void imageRepresentationCallback(bool isLeft,
+                                 const cv::Size resolution,
+                                 dv::EventPolarityFilter<>& positive,
+                                 dv::EventPolarityFilter<>& negative,
+                                 dv::Accumulator& positiveTS,
+                                 dv::Accumulator& negativeTS,
+                                 queue<dv::EventStore>& incomingEvents,
+                                 queue<vector<cv::Mat>>& outgoingImages
                                  ) {
 
-    dv::noise::BackgroundActivityNoiseFilter high_pass(resolution, 10us);
-    dv::noise::LowPassFilter low_pass(resolution, 500.0f);
-
     while(true) {
-        if(!events_in.empty()) {
-            auto in_events = events_in.pop();
+        if(!incomingEvents.empty()) {
+            auto events = incomingEvents.front();
+            incomingEvents.pop();
 
-            ////cout << (is_left ? "true" : "false") << " events_in pop\n";
-            high_pass.accept(in_events);
-            low_pass.accept(high_pass.generateEvents());
-
-            events_out.push(low_pass.generateEvents());
-
-            // Notify main thread this side is ready
-            {
-                lock_guard<mutex> lock(mtx);
-                ready_flag = true;
+            if(isLeft) {
+                vector<cv::Mat> images = leftImageRepresentation(resolution, positive, negative, positiveTS, negativeTS, events);
+                outgoingImages.push(images);
+            } else {
+                vector<cv::Mat> images = rightImageRepresentation(positive, negative, positiveTS, negativeTS, events);
+                outgoingImages.push(images);
             }
-            cv.notify_one();
-
-            ////cout << (is_left ? "true" : "false") << " events_out push\n";
         } else {
-            this_thread::yield();
+            this_thread::sleep_for(2ms);
         }
     }
 }

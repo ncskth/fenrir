@@ -66,55 +66,55 @@ int main()
     visualizer_right.setPositiveColor(dv::visualization::colors::blue);
     visualizer_right.setNegativeColor(dv::visualization::colors::green);
 
-    dv::EventPolarityFilter left_positive(true);
-    dv::EventPolarityFilter left_negative(false);
-    dv::EventPolarityFilter right_positive(true);
-    dv::EventPolarityFilter right_negative(false);
+    dv::EventPolarityFilter leftPositive(true);
+    dv::EventPolarityFilter leftNegative(false);
+    dv::EventPolarityFilter rightPositive(true);
+    dv::EventPolarityFilter rightNegative(false);
 
-    dv::Accumulator left_positive_ts(resolution);
-    left_positive_ts.setMinPotential(0.f);
-    left_positive_ts.setMaxPotential(1.f);
-    left_positive_ts.setNeutralPotential(0.f);
-    left_positive_ts.setEventContribution(1.f);
-    left_positive_ts.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
-    left_positive_ts.setDecayParam(1e+5);
-    left_positive_ts.setIgnorePolarity(true);
-    left_positive_ts.setSynchronousDecay(true);
+    dv::Accumulator leftPositiveTS(resolution);
+    leftPositiveTS.setMinPotential(0.f);
+    leftPositiveTS.setMaxPotential(1.f);
+    leftPositiveTS.setNeutralPotential(0.f);
+    leftPositiveTS.setEventContribution(1.f);
+    leftPositiveTS.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
+    leftPositiveTS.setDecayParam(1e+5);
+    leftPositiveTS.setIgnorePolarity(true);
+    leftPositiveTS.setSynchronousDecay(true);
 
-    dv::Accumulator left_negative_ts(resolution);
-    left_negative_ts.setMinPotential(0.f);
-    left_negative_ts.setMaxPotential(1.f);
-    left_negative_ts.setNeutralPotential(0.f);
-    left_negative_ts.setEventContribution(1.f);
-    left_negative_ts.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
-    left_negative_ts.setDecayParam(1e+5);
-    left_negative_ts.setIgnorePolarity(true);
-    left_negative_ts.setSynchronousDecay(true);
+    dv::Accumulator leftNegativeTS(resolution);
+    leftNegativeTS.setMinPotential(0.f);
+    leftNegativeTS.setMaxPotential(1.f);
+    leftNegativeTS.setNeutralPotential(0.f);
+    leftNegativeTS.setEventContribution(1.f);
+    leftNegativeTS.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
+    leftNegativeTS.setDecayParam(1e+5);
+    leftNegativeTS.setIgnorePolarity(true);
+    leftNegativeTS.setSynchronousDecay(true);
 
-    dv::Accumulator right_positive_ts(resolution);
-    right_positive_ts.setMinPotential(0.f);
-    right_positive_ts.setMaxPotential(1.f);
-    right_positive_ts.setNeutralPotential(0.f);
-    right_positive_ts.setEventContribution(1.f);
-    right_positive_ts.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
-    right_positive_ts.setDecayParam(3e+4);
-    right_positive_ts.setIgnorePolarity(true);
-    right_positive_ts.setSynchronousDecay(true);
+    dv::Accumulator rightPositiveTS(resolution);
+    rightPositiveTS.setMinPotential(0.f);
+    rightPositiveTS.setMaxPotential(1.f);
+    rightPositiveTS.setNeutralPotential(0.f);
+    rightPositiveTS.setEventContribution(1.f);
+    rightPositiveTS.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
+    rightPositiveTS.setDecayParam(3e+4);
+    rightPositiveTS.setIgnorePolarity(true);
+    rightPositiveTS.setSynchronousDecay(true);
 
-    dv::Accumulator right_negative_ts(resolution);
-    right_negative_ts.setMinPotential(0.f);
-    right_negative_ts.setMaxPotential(1.f);
-    right_negative_ts.setNeutralPotential(0.f);
-    right_negative_ts.setEventContribution(1.f);
-    right_negative_ts.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
-    right_negative_ts.setDecayParam(3e+4);
-    right_negative_ts.setIgnorePolarity(true);
-    right_negative_ts.setSynchronousDecay(true);
+    dv::Accumulator rightNegativeTS(resolution);
+    rightNegativeTS.setMinPotential(0.f);
+    rightNegativeTS.setMaxPotential(1.f);
+    rightNegativeTS.setNeutralPotential(0.f);
+    rightNegativeTS.setEventContribution(1.f);
+    rightNegativeTS.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
+    rightNegativeTS.setDecayParam(3e+4);
+    rightNegativeTS.setIgnorePolarity(true);
+    rightNegativeTS.setSynchronousDecay(true);
 
     dv::SpeedInvariantTimeSurface speed_invariant_left(resolution);
 
     // Register a callback to be done at 20Hz
-    slicer_left.doEveryTimeInterval(50ms, [&resolution, &left_positive_ts, &left_negative_ts, &left_positive, &left_negative, &speed_invariant_left](const auto &leftEvents) {
+    slicer_left.doEveryTimeInterval(50ms, [&resolution, &leftPositiveTS, &leftNegativeTS, &leftPositive, &leftNegative, &speed_invariant_left](const auto &leftEvents) {
 
         auto speed_invariant_future = async(launch::async, [&]() {
             //speed_invariant_left.accept(leftEvents);
@@ -124,17 +124,17 @@ int main()
 
         // Start thread for negative time surface update
         auto negative_future = async(launch::async, [&]() {
-            left_negative.accept(leftEvents);
-            const auto negative = left_negative.generateEvents();
-            left_negative_ts.accept(negative);
-            return left_negative_ts.generateFrame();
+            leftNegative.accept(leftEvents);
+            const auto negative = leftNegative.generateEvents();
+            leftNegativeTS.accept(negative);
+            return leftNegativeTS.generateFrame();
         });
 
         // Update positive time surface on main thread
-        left_positive.accept(leftEvents);
-        const auto positive = left_positive.generateEvents();
-        left_positive_ts.accept(positive);
-        dv::Frame pos_frame = left_positive_ts.generateFrame();
+        leftPositive.accept(leftEvents);
+        const auto positive = leftPositive.generateEvents();
+        leftPositiveTS.accept(positive);
+        dv::Frame pos_frame = leftPositiveTS.generateFrame();
 
         // Wait for negative thread to complete
         dv::Frame neg_frame = negative_future.get();
@@ -150,21 +150,21 @@ int main()
         cv::imshow("Left", left_image);
         cv::waitKey(2);
     });
-    slicer_right.doEveryTimeInterval(50ms, [&right_positive_ts, &right_negative_ts, &right_positive, &right_negative](const auto &rightEvents) {
+    slicer_right.doEveryTimeInterval(50ms, [&rightPositiveTS, &rightNegativeTS, &rightPositive, &rightNegative](const auto &rightEvents) {
 
         // Start thread for negative time surface update
         auto negative_future = async(launch::async, [&]() {
-            right_negative.accept(rightEvents);
-            const auto negative = right_negative.generateEvents();
-            right_negative_ts.accept(negative);
-            return right_negative_ts.generateFrame();
+            rightNegative.accept(rightEvents);
+            const auto negative = rightNegative.generateEvents();
+            rightNegativeTS.accept(negative);
+            return rightNegativeTS.generateFrame();
         });
 
         // Update positive time surface on main thread
-        right_positive.accept(rightEvents);
-        const auto positive = right_positive.generateEvents();
-        right_positive_ts.accept(positive);
-        dv::Frame pos_frame = right_positive_ts.generateFrame();
+        rightPositive.accept(rightEvents);
+        const auto positive = rightPositive.generateEvents();
+        rightPositiveTS.accept(positive);
+        dv::Frame pos_frame = rightPositiveTS.generateFrame();
 
         // Wait for negative thread to complete
         dv::Frame neg_frame = negative_future.get();
@@ -204,6 +204,33 @@ int main()
     dv::EventMaskFilter mask_filter_left(mask_left.t());
     dv::EventMaskFilter mask_filter_right(mask_right.t());
 
+    dv::EventStore leftEventBuffer;
+    dv::EventStore rightEventBuffer;
+
+    queue<dv::EventStore> leftEventQueue;
+    queue<dv::EventStore> rightEventQueue;
+    queue<vector<cv::Mat>> leftImageQueue;
+    queue<vector<cv::Mat>> rightImageQueue;
+
+    thread leftImageRepresentationThread(&imageRepresentationCallback,
+                                         true,
+                                         resolution,
+                                         ref(leftPositive),
+                                         ref(leftNegative),
+                                         ref(leftPositiveTS),
+                                         ref(leftNegativeTS),
+                                         ref(leftEventQueue),
+                                         ref(leftImageQueue));
+    thread rightImageRepresentationThread(&imageRepresentationCallback,
+                                          false,
+                                          resolution,
+                                          ref(rightPositive),
+                                          ref(rightNegative),
+                                          ref(rightPositiveTS),
+                                          ref(rightNegativeTS),
+                                          ref(rightEventQueue),
+                                          ref(rightImageQueue));
+
     // Run the processing loop while both cameras are connected
     while (leftCamera->isRunning() && rightCamera->isRunning()) {
         // Read events from respective left / right cameras
@@ -214,7 +241,7 @@ int main()
             const auto low = low_pass_left.generateEvents();
             mask_filter_left.accept(low);
             const auto masked = mask_filter_left.generateEvents();
-            slicer_left.accept(low);
+            leftEventBuffer.add(masked);
         }
         if (const auto raw = rightCamera->getNextEventBatch()) {
             high_pass_right.accept(*raw);
@@ -223,9 +250,31 @@ int main()
             const auto low = low_pass_right.generateEvents();
             mask_filter_right.accept(low);
             const auto masked = mask_filter_right.generateEvents();
-            slicer_right.accept(masked);
+            rightEventBuffer.add(masked);
         }
-
+        if (leftEventBuffer.size() > 200000) {
+            leftEventQueue.push(leftEventBuffer);
+            leftEventBuffer = dv::EventStore();
+        }
+        if (rightEventBuffer.size() > 200000) {
+            rightEventQueue.push(rightEventBuffer);
+            rightEventBuffer = dv::EventStore();
+        }
+        if (!leftImageQueue.empty()) {
+            cv::Mat leftImage;
+            cv::hconcat(leftImageQueue.front()[0], leftImageQueue.front()[1], leftImage);
+            cv::hconcat(leftImage, leftImageQueue.front()[2], leftImage);
+            leftImageQueue.pop();
+            cv::imshow("Left", leftImage);
+            cv::waitKey(1);
+        }
+        if (!rightImageQueue.empty()) {
+            cv::Mat rightImage;
+            cv::hconcat(rightImageQueue.front()[0], rightImageQueue.front()[1], rightImage);
+            rightImageQueue.pop();
+            cv::imshow("Right", rightImage);
+            cv::waitKey(1);
+        }
         // Wait for a small amount of time to avoid CPU overhaul
         //cv::waitKey(1);
     }
