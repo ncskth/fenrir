@@ -34,47 +34,17 @@ int main()
     // It is expected that calibration file will have "C0" as the leftEventBuffer camera
     auto leftCameraCalib = calibration.getCameraCalibration("C0").value();
     const cv::Size resolution = leftCameraCalib.resolution;
-    cv::Mat leftMapX, leftMapY;
-    cv::initUndistortRectifyMap(leftCameraCalib.getCameraMatrix(),
-                                leftCameraCalib.distortion,
-                                cv::Mat(),
-                                leftCameraCalib.getCameraMatrix(),
-                                resolution,
-                                CV_32F,
-                                leftMapX,
-                                leftMapY);
+    cv::Matx33f camMatL = leftCameraCalib.getCameraMatrix();
+    vector<float> distCoeffsL = leftCameraCalib.distortion;
 
     // The second camera is assumed to be rightEventBuffer-side camera
     auto rightCameraCalib = calibration.getCameraCalibration("C1").value();
-    for(float c : rightCameraCalib.distortion) {
-        cout << c << endl;
-    }
-    cv::Mat rightMapX, rightMapY;
-    cv::initUndistortRectifyMap(rightCameraCalib.getCameraMatrix(),
-                                rightCameraCalib.distortion,
-                                cv::Mat(),
-                                rightCameraCalib.getCameraMatrix(),
-                                resolution,
-                                CV_32F,
-                                rightMapX,
-                                rightMapY);
+    cv::Matx33f camMatR = rightCameraCalib.getCameraMatrix();
+    vector<float> distCoeffsR = rightCameraCalib.distortion;
 
     // Initialize a window to show previews of the output
     cv::namedWindow("Left", cv::WINDOW_NORMAL);
     cv::namedWindow("Right", cv::WINDOW_NORMAL);
-
-    /*
-    dv::visualization::EventVisualizer visualizer_left(resolution);
-    dv::visualization::EventVisualizer visualizer_right(resolution);
-
-    // Apply color scheme configuration, these values can be modified to taste
-    visualizer_left.setBackgroundColor(dv::visualization::colors::black);
-    visualizer_left.setPositiveColor(dv::visualization::colors::blue);
-    visualizer_left.setNegativeColor(dv::visualization::colors::green);
-    visualizer_right.setBackgroundColor(dv::visualization::colors::black);
-    visualizer_right.setPositiveColor(dv::visualization::colors::blue);
-    visualizer_right.setNegativeColor(dv::visualization::colors::green);
-    */
 
     queue<dv::EventStore> leftEventQueue;
     queue<dv::EventStore> rightEventQueue;
@@ -92,15 +62,15 @@ int main()
     thread leftImageRepresentationThread(&imageRepresentationCallback,
                                          true,
                                          resolution,
-                                         leftMapX,
-                                         leftMapY,
+                                         camMatL,
+                                         distCoeffsL,
                                          ref(leftEventQueue),
                                          ref(leftImageQueue));
     thread rightImageRepresentationThread(&imageRepresentationCallback,
                                           false,
                                           resolution,
-                                          rightMapX,
-                                          rightMapY,
+                                          camMatR,
+                                          distCoeffsR,
                                           ref(rightEventQueue),
                                           ref(rightImageQueue));
 
@@ -120,7 +90,7 @@ int main()
             cv::imshow("Right", rightImage);
         }
         // Wait for a small amount of time to avoid CPU overhaul
-        cv::waitKey(2);
+        cv::waitKey(1);
     }
     //*/
     return 0;

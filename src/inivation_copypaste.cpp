@@ -1,3 +1,4 @@
+#include <dv-processing/core/frame.hpp>
 #include <dv-processing/io/camera/discovery.hpp>
 
 #include <opencv2/highgui.hpp>
@@ -13,8 +14,18 @@ int main() {
         throw dv::exceptions::RuntimeError("Input camera does not provide an event stream.");
     }
 
-    // Initialize an accumulator with camera sensor resolution
-    dv::SpeedInvariantTimeSurface surface(*capture->getEventResolution());
+    // Initialize an accumulator with some resolution
+    dv::Accumulator accumulator(*capture->getEventResolution());
+
+    // Apply configuration, these values can be modified to taste
+    accumulator.setMinPotential(0.f);
+    accumulator.setMaxPotential(1.f);
+    accumulator.setNeutralPotential(0.5f);
+    accumulator.setEventContribution(0.15f);
+    accumulator.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
+    accumulator.setDecayParam(1e+6);
+    accumulator.setIgnorePolarity(false);
+    accumulator.setSynchronousDecay(false);
 
     // Initialize a preview window
     cv::namedWindow("Preview", cv::WINDOW_NORMAL);
@@ -23,12 +34,10 @@ int main() {
     dv::EventStreamSlicer slicer;
 
     // Register a callback every 33 milliseconds
-    slicer.doEveryTimeInterval(33ms, [&surface](const dv::EventStore &events) {
-        // Pass the events to update the time surface
-        surface.accept(events);
-
-        // Generate a preview frame
-        dv::Frame frame = surface.generateFrame();
+    slicer.doEveryTimeInterval(33ms, [&accumulator](const dv::EventStore &events) {
+        // Pass events into the accumulator and generate a preview frame
+        accumulator.accept(events);
+        dv::Frame frame = accumulator.generateFrame();
 
         // Show the accumulated image
         cv::imshow("Preview", frame.image);

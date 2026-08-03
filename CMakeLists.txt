@@ -21,6 +21,7 @@ endif()
 add_executable(SlamDemo src/slamDemo.cpp)
 target_include_directories(SlamDemo PRIVATE src)
 add_executable(CopyPaste src/inivation_copypaste.cpp)
+add_executable(Calibration src/calibration.cpp)
 
 target_link_libraries(SlamDemo PUBLIC
     dv::processing
@@ -28,6 +29,11 @@ target_link_libraries(SlamDemo PUBLIC
     cnpy_imported
 )
 target_link_libraries(CopyPaste PUBLIC
+    dv::processing
+    opencv_core
+    cnpy_imported
+)
+target_link_libraries(Calibration PUBLIC
     dv::processing
     opencv_core
     cnpy_imported

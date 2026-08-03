@@ -82,7 +82,7 @@ accumulator_right = np.zeros((640, 480))
 start = time()
 
 # Run the event processing while the camera is connected
-while capture_left.isRunning() and capture_right.isRunning() and time() - start < 1:
+while capture_left.isRunning() and capture_right.isRunning() and time() - start < 0.1:
     # Receive events
     events_left = capture_left.getNextEventBatch()
     events_right = capture_right.getNextEventBatch()

@@ -5,8 +5,6 @@
 #include <dv-processing/noise/frequency_filters.hpp>
 #include <dv-processing/core/core.hpp>
 #include <dv-processing/camera/calibration_set.hpp>
-#include <dv-processing/core/stereo_event_stream_slicer.hpp>
-#include <dv-processing/depth/semi_dense_stereo_matcher.hpp>
 
 #include <opencv2/highgui.hpp>
 
@@ -88,15 +86,23 @@ void cameraCaptureCallback(const cv::Size resolution,
             rightEventBuffer.add(masked);
         }
         auto now = chrono::high_resolution_clock::now();
-        if (now - lastLeft > 100ms || leftEventBuffer.size() > 200000) {
+        if (now - lastLeft > 33ms) {
             outgoingLeftEvents.push(leftEventBuffer);
             leftEventBuffer = dv::EventStore();
             lastLeft = now;
         }
-        if (now - lastRight > 100ms || rightEventBuffer.size() > 200000) {
+        //if (leftEventBuffer.size() > 200000) {
+        //    outgoingLeftEvents.push(leftEventBuffer);
+        //    leftEventBuffer = dv::EventStore();
+        //}
+        if (now - lastRight > 33ms) {
             outgoingRightEvents.push(rightEventBuffer);
             rightEventBuffer = dv::EventStore();
             lastRight = now;
         }
+        //if (rightEventBuffer.size() > 200000) {
+        //    outgoingRightEvents.push(rightEventBuffer);
+        //    rightEventBuffer = dv::EventStore();
+        //}
     }
 }

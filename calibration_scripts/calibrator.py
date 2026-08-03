@@ -25,18 +25,17 @@ last_time = time.time()
 
 frame_parity = False
 while True:
-    current_time = time.time()
-    elapsed = current_time - last_time
-    if elapsed < 1.0/120.0:
-        time.sleep(1.0/120.0 - elapsed)
+    #current_time = time.time()
+    #elapsed = current_time - last_time
+    #if elapsed < 1.0/60.0:
+    #    time.sleep(1.0/60.0 - elapsed)
     if frame_parity:
         cv2.imshow(win_name, on_frame)
         frame_parity = False
     else:
         cv2.imshow(win_name, off_frame)
         frame_parity = True
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
     last_time = time.time()
+    cv2.waitKey(20)
     #cv2.imshow(win_name, on_frame)
     #cv2.waitKey(0)
