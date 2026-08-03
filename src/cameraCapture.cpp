@@ -23,7 +23,9 @@ void cameraCaptureCallback(const cv::Size resolution,
                            const string rightSerial,
                            const string hotPixelDir,
                            queue<dv::EventStore>& outgoingLeftEvents,
-                           queue<dv::EventStore>& outgoingRightEvents) {
+                           queue<dv::EventStore>& outgoingRightEvents,
+                           queue<cv::Affine3d>& outgoingPose
+                           ) {
 
     // Open the stereo camera with camera names from calibration
     auto leftCamera  = dv::io::camera::open(leftSerial);
@@ -65,6 +67,11 @@ void cameraCaptureCallback(const cv::Size resolution,
     auto lastLeft = chrono::high_resolution_clock::now();
     auto lastRight = chrono::high_resolution_clock::now();
 
+    int64_t lastIMUTime = dv::now();
+    cv::Affine3d pose = cv::Affine3d::Identity();
+    cv::Vec3d velocity(0, 0, 0);
+    cv::Vec3d gyro(0, 0, 0);
+
     while (leftCamera->isRunning() && rightCamera->isRunning()) {
         // Read events from respective left / right cameras
         if (const auto raw = leftCamera->getNextEventBatch()) {
@@ -76,6 +83,7 @@ void cameraCaptureCallback(const cv::Size resolution,
             const auto masked = mask_filter_left.generateEvents();
             leftEventBuffer.add(masked);
         }
+
         if (const auto raw = rightCamera->getNextEventBatch()) {
             high_pass_right.accept(*raw);
             const auto high = high_pass_right.generateEvents();
@@ -85,24 +93,42 @@ void cameraCaptureCallback(const cv::Size resolution,
             const auto masked = mask_filter_right.generateEvents();
             rightEventBuffer.add(masked);
         }
+
+        if (const auto imuBatch = leftCamera->getNextImuBatch()) {
+            for (auto imu : *imuBatch) {
+                float dt = 1e-6*((float)(imu.timestamp - lastIMUTime));
+
+                cv::Vec3d gyro(imu.gyroscopeX, imu.gyroscopeY, imu.gyroscopeZ);
+                cv::Vec3d deltaAngle = gyro * dt;
+                cv::Matx33d R = pose.rotation();
+                cv::Matx33d deltaR;
+                cv::Rodrigues(deltaAngle, deltaR);
+                R = deltaR * R;
+
+                cv::Vec3d accel(imu.accelerometerX, imu.accelerometerY, imu.accelerometerZ);
+                cv::Vec3d worldAccel = R * accel;  // Rotate to world frame
+                worldAccel[2] -= 9.81;  // Remove gravity
+                velocity += worldAccel * dt;
+
+                pose = cv::Affine3d(R, pose.translation() + velocity*dt);
+
+                lastIMUTime = imu.timestamp;
+            }
+            outgoingPose.push(pose);
+        }
+
         auto now = chrono::high_resolution_clock::now();
         if (now - lastLeft > 33ms) {
             outgoingLeftEvents.push(leftEventBuffer);
             leftEventBuffer = dv::EventStore();
             lastLeft = now;
         }
-        //if (leftEventBuffer.size() > 200000) {
-        //    outgoingLeftEvents.push(leftEventBuffer);
-        //    leftEventBuffer = dv::EventStore();
-        //}
+
         if (now - lastRight > 33ms) {
             outgoingRightEvents.push(rightEventBuffer);
             rightEventBuffer = dv::EventStore();
             lastRight = now;
         }
-        //if (rightEventBuffer.size() > 200000) {
-        //    outgoingRightEvents.push(rightEventBuffer);
-        //    rightEventBuffer = dv::EventStore();
-        //}
+
     }
 }

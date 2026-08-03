@@ -8,6 +8,8 @@
 #include <dv-processing/core/stereo_event_stream_slicer.hpp>
 #include <dv-processing/depth/semi_dense_stereo_matcher.hpp>
 
+#include <opencv2/viz.hpp>
+#include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
 
 #include <iostream>
@@ -45,9 +47,12 @@ int main()
     // Initialize a window to show previews of the output
     cv::namedWindow("Left", cv::WINDOW_NORMAL);
     cv::namedWindow("Right", cv::WINDOW_NORMAL);
+    cv::viz::Viz3d window("Trajectory");
 
     queue<dv::EventStore> leftEventQueue;
     queue<dv::EventStore> rightEventQueue;
+    queue<cv::Affine3d> poseQueue;
+    vector<cv::Affine3d> poseTrajectory;
     queue<vector<cv::Mat>> leftImageQueue;
     queue<vector<cv::Mat>> rightImageQueue;
 
@@ -57,7 +62,8 @@ int main()
                                rightCameraCalib.name,
                                "/home/kadile/Projects/fenrir/hot_pixels_mimir_jr",
                                ref(leftEventQueue),
-                               ref(rightEventQueue));
+                               ref(rightEventQueue),
+                               ref(poseQueue));
 
     thread leftImageRepresentationThread(&imageRepresentationCallback,
                                          true,
@@ -88,6 +94,17 @@ int main()
             cv::hconcat(rightImageQueue.front()[0], rightImageQueue.front()[1], rightImage);
             rightImageQueue.pop();
             cv::imshow("Right", rightImage);
+        }
+        if (!poseQueue.empty()) {
+            cv::Affine3d pose = poseQueue.front();
+            poseQueue.pop();
+            poseTrajectory.push_back(pose);
+            cv::viz::WTrajectory trajectory(poseTrajectory, cv::viz::WTrajectory::PATH, 1.0, cv::viz::Color::green());
+            window.showWidget("Tajectory", trajectory);
+            window.spinOnce(1, true);
+            if(poseTrajectory.size() > 2000) {
+                poseTrajectory.erase(poseTrajectory.begin(), poseTrajectory.begin() + 1000);
+            }
         }
         // Wait for a small amount of time to avoid CPU overhaul
         cv::waitKey(1);
