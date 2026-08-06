@@ -19,6 +19,7 @@
 #include <cnpy.h>
 
 #include <cameraCapture.cpp>
+#include <tracking.cpp>
 #include <imageRepresentation.cpp>
 
 using namespace std::chrono_literals;
@@ -44,26 +45,39 @@ int main()
     cv::Matx33f camMatR = rightCameraCalib.getCameraMatrix();
     vector<float> distCoeffsR = rightCameraCalib.distortion;
 
+    auto imuCalib = calibration.getImuCalibration("S0").value();
+    cv::Point3f gyroBias = imuCalib.omegaOffsetAvg;
+    cv::Point3f accelBias = imuCalib.accOffsetAvg;
+
     // Initialize a window to show previews of the output
     cv::namedWindow("Left", cv::WINDOW_NORMAL);
     cv::namedWindow("Right", cv::WINDOW_NORMAL);
-    cv::viz::Viz3d window("Trajectory");
+    cv::namedWindow("Trajectory", cv::WINDOW_NORMAL);
 
     queue<dv::EventStore> leftEventQueue;
     queue<dv::EventStore> rightEventQueue;
-    queue<cv::Affine3d> poseQueue;
-    vector<cv::Affine3d> poseTrajectory;
+    queue<vector<dv::IMU>> imuQueue;
+    queue<cv::Mat> velocityVisQueue;
+    //vector<cv::Affine3d> poseTrajectory;
     queue<vector<cv::Mat>> leftImageQueue;
     queue<vector<cv::Mat>> rightImageQueue;
 
-    thread CameraCaptureThread(&cameraCaptureCallback,
+    cv::Mat trajectoryVisualization = cv::Mat::zeros(400, 400, CV_8UC1);
+
+    thread cameraCaptureThread(&cameraCaptureCallback,
                                resolution,
                                leftCameraCalib.name,
                                rightCameraCalib.name,
                                "/home/kadile/Projects/fenrir/hot_pixels_mimir_jr",
                                ref(leftEventQueue),
                                ref(rightEventQueue),
-                               ref(poseQueue));
+                               ref(imuQueue));
+
+    thread trackingThread(&trackingCallback,
+                          gyroBias,
+                          accelBias,
+                          ref(imuQueue),
+                          ref(velocityVisQueue));
 
     thread leftImageRepresentationThread(&imageRepresentationCallback,
                                          true,
@@ -95,19 +109,13 @@ int main()
             rightImageQueue.pop();
             cv::imshow("Right", rightImage);
         }
-        if (!poseQueue.empty()) {
-            cv::Affine3d pose = poseQueue.front();
-            poseQueue.pop();
-            poseTrajectory.push_back(pose);
-            cv::viz::WTrajectory trajectory(poseTrajectory, cv::viz::WTrajectory::PATH, 1.0, cv::viz::Color::green());
-            window.showWidget("Tajectory", trajectory);
-            window.spinOnce(1, true);
-            if(poseTrajectory.size() > 2000) {
-                poseTrajectory.erase(poseTrajectory.begin(), poseTrajectory.begin() + 1000);
-            }
+        if (!velocityVisQueue.empty()) {
+            cv::Mat trajectoryVisualization = velocityVisQueue.front();
+            velocityVisQueue.pop();
+            cv::imshow("Trajectory", trajectoryVisualization);
         }
         // Wait for a small amount of time to avoid CPU overhaul
-        cv::waitKey(1);
+        cv::waitKey(2);
     }
     //*/
     return 0;

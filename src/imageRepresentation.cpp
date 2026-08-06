@@ -126,7 +126,7 @@ vector<cv::Mat> leftImageRepresentation(
 {
     auto aaFuture = async(launch::async, [&]()
                           {
-        cv::Mat image = adaptiveAccumulation(resolution, 1, 1, events);
+        cv::Mat image = adaptiveAccumulation(resolution, 8, 6, events);
         cv::Mat undistorted;
         cv::undistort(image, undistorted, cameraMatrix, distortionCoefficients);
         return undistorted;
@@ -269,7 +269,7 @@ void imageRepresentationCallback(const bool isLeft,
             }
             else
             {
-                this_thread::sleep_for(1ms);
+                this_thread::sleep_for(2ms);
             }
         }
     }
@@ -287,7 +287,7 @@ void imageRepresentationCallback(const bool isLeft,
             }
             else
             {
-                this_thread::sleep_for(1ms);
+                this_thread::sleep_for(2ms);
             }
         }
     }

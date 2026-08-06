@@ -24,7 +24,7 @@ void cameraCaptureCallback(const cv::Size resolution,
                            const string hotPixelDir,
                            queue<dv::EventStore>& outgoingLeftEvents,
                            queue<dv::EventStore>& outgoingRightEvents,
-                           queue<cv::Affine3d>& outgoingPose
+                           queue<vector<dv::IMU>>& outgoingIMU
                            ) {
 
     // Open the stereo camera with camera names from calibration
@@ -63,14 +63,10 @@ void cameraCaptureCallback(const cv::Size resolution,
 
     dv::EventStore leftEventBuffer;
     dv::EventStore rightEventBuffer;
+    vector<dv::IMU> imuBuffer;
 
     auto lastLeft = chrono::high_resolution_clock::now();
     auto lastRight = chrono::high_resolution_clock::now();
-
-    int64_t lastIMUTime = dv::now();
-    cv::Affine3d pose = cv::Affine3d::Identity();
-    cv::Vec3d velocity(0, 0, 0);
-    cv::Vec3d gyro(0, 0, 0);
 
     while (leftCamera->isRunning() && rightCamera->isRunning()) {
         // Read events from respective left / right cameras
@@ -95,40 +91,38 @@ void cameraCaptureCallback(const cv::Size resolution,
         }
 
         if (const auto imuBatch = leftCamera->getNextImuBatch()) {
-            for (auto imu : *imuBatch) {
-                float dt = 1e-6*((float)(imu.timestamp - lastIMUTime));
-
-                cv::Vec3d gyro(imu.gyroscopeX, imu.gyroscopeY, imu.gyroscopeZ);
-                cv::Vec3d deltaAngle = gyro * dt;
-                cv::Matx33d R = pose.rotation();
-                cv::Matx33d deltaR;
-                cv::Rodrigues(deltaAngle, deltaR);
-                R = deltaR * R;
-
-                cv::Vec3d accel(imu.accelerometerX, imu.accelerometerY, imu.accelerometerZ);
-                cv::Vec3d worldAccel = R * accel;  // Rotate to world frame
-                worldAccel[2] -= 9.81;  // Remove gravity
-                velocity += worldAccel * dt;
-
-                pose = cv::Affine3d(R, pose.translation() + velocity*dt);
-
-                lastIMUTime = imu.timestamp;
+            imuBuffer.insert(imuBuffer.end(), imuBatch->begin(), imuBatch->end());
+            //vector<dv::IMU> copy(*imuBatch);
+            if(imuBuffer.size() >= 200) {
+                outgoingIMU.push(imuBuffer);
+                imuBuffer.clear();
+                //cout << "Sent IMU!" << endl;
             }
-            outgoingPose.push(pose);
         }
 
         auto now = chrono::high_resolution_clock::now();
-        if (now - lastLeft > 33ms) {
+        if (now - lastLeft > 50ms) {
             outgoingLeftEvents.push(leftEventBuffer);
             leftEventBuffer = dv::EventStore();
             lastLeft = now;
         }
-
-        if (now - lastRight > 33ms) {
+        if (now - lastRight > 50ms) {
             outgoingRightEvents.push(rightEventBuffer);
             rightEventBuffer = dv::EventStore();
             lastRight = now;
         }
-
+        /*
+        auto now = chrono::high_resolution_clock::now();
+        if (leftEventBuffer.size() > 200000) {
+            outgoingLeftEvents.push(leftEventBuffer);
+            leftEventBuffer = dv::EventStore();
+            lastLeft = now;
+        }
+        if (rightEventBuffer.size() > 200000) {
+            outgoingRightEvents.push(rightEventBuffer);
+            rightEventBuffer = dv::EventStore();
+            lastRight = now;
+        }
+        */
     }
 }

@@ -122,18 +122,18 @@
     },
     "imus": {
         "S0": {
-            "name": "DVXM000089",
+            "name": "DVXM0089",
             "omegaMax": "100",
             "accMax": "98.0999985",
             "omegaOffsetAvg": [
-                "0",
-                "0",
-                "0"
+                "-0.144929",
+                "0.736265",
+                "0.302699"
             ],
             "accOffsetAvg": [
-                "0",
-                "0",
-                "0"
+                "0.0038",
+                "0.0052",
+                "-0.0522"
             ],
             "omegaOffsetVar": "1",
             "accOffsetVar": "1",
@@ -147,50 +147,6 @@
                 "0",
                 "0",
                 "0",
-                "0",
-                "1",
-                "0",
-                "0",
-                "0",
-                "0",
-                "1",
-                "0",
-                "0",
-                "0",
-                "0",
-                "1"
-            ],
-            "metadata": {
-                "calibrationTime": "",
-                "comment": ""
-            }
-        },
-        "S1": {
-            "name": "DVXM000090",
-            "omegaMax": "100",
-            "accMax": "98.0999985",
-            "omegaOffsetAvg": [
-                "0",
-                "0",
-                "0"
-            ],
-            "accOffsetAvg": [
-                "0",
-                "0",
-                "0"
-            ],
-            "omegaOffsetVar": "1",
-            "accOffsetVar": "1",
-            "omegaNoiseDensity": "1",
-            "accNoiseDensity": "1",
-            "omegaNoiseRandomWalk": "1",
-            "accNoiseRandomWalk": "1",
-            "timeOffsetMicros": "3500",
-            "transformationToC0": [
-                "1",
-                "0",
-                "0",
-                "-0.11",
                 "0",
                 "1",
                 "0",
