@@ -59,7 +59,7 @@ int main()
     queue<vector<dv::IMU>> imuQueue;
     queue<cv::Mat> velocityVisQueue;
     //vector<cv::Affine3d> poseTrajectory;
-    queue<vector<cv::Mat>> leftImageQueue;
+    queue<tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>>> leftImageQueue;
     queue<vector<cv::Mat>> rightImageQueue;
 
     cv::Mat trajectoryVisualization = cv::Mat::zeros(400, 400, CV_8UC1);
@@ -73,21 +73,19 @@ int main()
                                ref(rightEventQueue),
                                ref(imuQueue));
 
-    thread trackingThread(&trackingCallback,
-                          gyroBias,
-                          accelBias,
-                          ref(imuQueue),
-                          ref(velocityVisQueue));
+    //thread trackingThread(&trackingCallback,
+    //                      gyroBias,
+    //                      accelBias,
+    //                      ref(imuQueue),
+    //                      ref(velocityVisQueue));
 
-    thread leftImageRepresentationThread(&imageRepresentationCallback,
-                                         true,
+    thread leftImageRepresentationThread(&leftImageRepresentationCallback,
                                          resolution,
                                          camMatL,
                                          distCoeffsL,
                                          ref(leftEventQueue),
                                          ref(leftImageQueue));
-    thread rightImageRepresentationThread(&imageRepresentationCallback,
-                                          false,
+    thread rightImageRepresentationThread(&rightImageRepresentationCallback,
                                           resolution,
                                           camMatR,
                                           distCoeffsR,
@@ -97,11 +95,23 @@ int main()
     // Run the processing loop while both cameras are connected
     while (true) {
         if (!leftImageQueue.empty()) {
-            cv::Mat leftImage;
-            cv::hconcat(leftImageQueue.front()[0], leftImageQueue.front()[1], leftImage);
-            cv::hconcat(leftImage, leftImageQueue.front()[2], leftImage);
+            auto leftqFront = leftImageQueue.front();
             leftImageQueue.pop();
-            cv::imshow("Left", leftImage);
+
+            cv::Mat leftImage;
+            cv::hconcat(get<0>(leftqFront)[0], get<0>(leftqFront)[1], leftImage);
+            cv::hconcat(leftImage, get<0>(leftqFront)[2], leftImage);
+            cv::Mat leftImageBGR;
+            cv::cvtColor(leftImage, leftImageBGR, cv::COLOR_GRAY2BGR);
+
+            for(auto ev : get<1>(leftqFront)) {
+                leftImageBGR.at<cv::Vec3b>(ev.y(), ev.x()) = cv::Vec3b(255, 0, 0);
+            }
+            for(auto ev : get<2>(leftqFront)) {
+                leftImageBGR.at<cv::Vec3b>(ev.y(), ev.x()) = cv::Vec3b(0, 0, 255);
+            }
+
+            cv::imshow("Left", leftImageBGR);
         }
         if (!rightImageQueue.empty()) {
             cv::Mat rightImage;

@@ -36,8 +36,8 @@ void cameraCaptureCallback(const cv::Size resolution,
         throw dv::exceptions::RuntimeError("Input camera does not provide an event stream.");
     }
 
-    dv::noise::BackgroundActivityNoiseFilter high_pass_left(resolution, 10us);
-    dv::noise::BackgroundActivityNoiseFilter high_pass_right(resolution, 10us);
+    dv::noise::BackgroundActivityNoiseFilter high_pass_left(resolution, 1ms);
+    dv::noise::BackgroundActivityNoiseFilter high_pass_right(resolution, 1ms);
     dv::noise::LowPassFilter low_pass_left(resolution, 500.0f);
     dv::noise::LowPassFilter low_pass_right(resolution, 500.0f);
 
@@ -65,8 +65,7 @@ void cameraCaptureCallback(const cv::Size resolution,
     dv::EventStore rightEventBuffer;
     vector<dv::IMU> imuBuffer;
 
-    auto lastLeft = chrono::high_resolution_clock::now();
-    auto lastRight = chrono::high_resolution_clock::now();
+    auto lastQPush = chrono::high_resolution_clock::now();
 
     while (leftCamera->isRunning() && rightCamera->isRunning()) {
         // Read events from respective left / right cameras
@@ -90,26 +89,23 @@ void cameraCaptureCallback(const cv::Size resolution,
             rightEventBuffer.add(masked);
         }
 
-        if (const auto imuBatch = leftCamera->getNextImuBatch()) {
-            imuBuffer.insert(imuBuffer.end(), imuBatch->begin(), imuBatch->end());
-            //vector<dv::IMU> copy(*imuBatch);
-            if(imuBuffer.size() >= 200) {
-                outgoingIMU.push(imuBuffer);
-                imuBuffer.clear();
-                //cout << "Sent IMU!" << endl;
-            }
-        }
+        //if (const auto imuBatch = leftCamera->getNextImuBatch()) {
+        //    imuBuffer.insert(imuBuffer.end(), imuBatch->begin(), imuBatch->end());
+        //    //vector<dv::IMU> copy(*imuBatch);
+        //    if(imuBuffer.size() >= 80) {
+        //        outgoingIMU.push(imuBuffer);
+        //        imuBuffer.clear();
+        //        //cout << "Sent IMU!" << endl;
+        //    }
+        //}
 
         auto now = chrono::high_resolution_clock::now();
-        if (now - lastLeft > 50ms) {
+        if (now - lastQPush > 50ms) {
             outgoingLeftEvents.push(leftEventBuffer);
             leftEventBuffer = dv::EventStore();
-            lastLeft = now;
-        }
-        if (now - lastRight > 50ms) {
             outgoingRightEvents.push(rightEventBuffer);
             rightEventBuffer = dv::EventStore();
-            lastRight = now;
+            lastQPush = now;
         }
         /*
         auto now = chrono::high_resolution_clock::now();

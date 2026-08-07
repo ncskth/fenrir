@@ -114,7 +114,14 @@ cv::Mat adaptiveAccumulation(cv::Size resolution,
     return representation_AA;
 }
 
-vector<cv::Mat> leftImageRepresentation(
+tuple<double, double> sobelAtPoint(cv::Mat img, int y, int x)
+{
+    double dx = (img.at<uchar>(x + 1, y) + 0.5 * (img.at<uchar>(x + 1, y + 1) + img.at<uchar>(x + 1, y + 1))) - (img.at<uchar>(x - 1, y) + 0.5 * (img.at<uchar>(x - 1, y + 1) + img.at<uchar>(x - 1, y + 1)));
+    double dy = (img.at<uchar>(x, y + 1) + 0.5 * (img.at<uchar>(x + 1, y + 1) + img.at<uchar>(x - 1, y + 1))) - (img.at<uchar>(x, y - 1) + 0.5 * (img.at<uchar>(x + 1, y - 1) + img.at<uchar>(x - 1, y - 1)));
+    return {dx, dy};
+}
+
+tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>> leftImageRepresentation(
     const cv::Size resolution,
     const cv::Matx33f cameraMatrix,
     const vector<float> distortionCoefficients,
@@ -124,33 +131,51 @@ vector<cv::Mat> leftImageRepresentation(
     dv::Accumulator &negativeTS,
     dv::EventStore &events)
 {
-    auto aaFuture = async(launch::async, [&]()
-                          {
-        cv::Mat image = adaptiveAccumulation(resolution, 8, 6, events);
-        cv::Mat undistorted;
-        cv::undistort(image, undistorted, cameraMatrix, distortionCoefficients);
-        return undistorted;
-    });
+    auto posFuture = async(launch::async, [&]()
+                           {
+
+        positive.accept(events);
+        const auto positiveEvents = positive.generateEvents();
+        positiveTS.accept(positiveEvents);
+        cv::Mat posTSDistorted = positiveTS.generateFrame().image;
+        cv::Mat posTS;
+        cv::undistort(posTSDistorted, posTS, cameraMatrix, distortionCoefficients);
+
+        return posTS; });
+
     auto negFuture = async(launch::async, [&]()
                            {
-        negative.accept(events);
-        const auto negativeEvents = negative.generateEvents();
-        negativeTS.accept(negativeEvents);
-        cv::Mat image = cv::Scalar(255) - negativeTS.generateFrame().image;
-        cv::Mat undistorted;
-        cv::undistort(image, undistorted, cameraMatrix, distortionCoefficients);
-        return undistorted;
-    });
+    negative.accept(events);
+    const auto negativeEvents = negative.generateEvents();
+    negativeTS.accept(negativeEvents);
+    cv::Mat image = cv::Scalar(255) - negativeTS.generateFrame().image;
+    cv::Mat negTS;
+    cv::undistort(image, negTS, cameraMatrix, distortionCoefficients);
+    return negTS; });
 
-    // Update positive time surface on main thread
-    positive.accept(events);
-    const auto positiveEvents = positive.generateEvents();
-    positiveTS.accept(positiveEvents);
-    cv::Mat posTSDistorted = positiveTS.generateFrame().image;
-    cv::Mat posTS;
-    cv::undistort(posTSDistorted, posTS, cameraMatrix, distortionCoefficients);
+    cv::Mat image = adaptiveAccumulation(resolution, 8, 6, events);
+    cv::Mat aa;
+    cv::undistort(image, aa, cameraMatrix, distortionCoefficients);
 
-    cv::Mat aa = aaFuture.get();
+    vector<dv::Event> dx_events, dy_events;
+    for (size_t i = 0; i < events.size(); i += 10)
+    {
+        dv::Event ev = events[i];
+        if (aa.at<uchar>(ev.y(), ev.x()) > 200 && ev.x() > 0 && ev.x() < resolution.width - 1 && ev.y() > 0 && ev.y() < resolution.height - 1)
+        {
+            auto sobel = sobelAtPoint(aa, ev.x(), ev.y());
+            if (abs(get<0>(sobel)) > 2.0 * abs(get<1>(sobel)))
+            {
+                dx_events.push_back(ev);
+            }
+            else if (abs(get<1>(sobel)) > 2.0 * abs(get<0>(sobel)))
+            {
+                dy_events.push_back(ev);
+            }
+        }
+    }
+
+    cv::Mat posTS = posFuture.get();
     cv::Mat negTS = negFuture.get();
 
     // Combine and display
@@ -158,7 +183,7 @@ vector<cv::Mat> leftImageRepresentation(
     images[0] = posTS;
     images[1] = negTS;
     images[2] = aa;
-    return images;
+    return {images, dx_events, dy_events};
 }
 
 vector<cv::Mat> rightImageRepresentation(
@@ -178,8 +203,7 @@ vector<cv::Mat> rightImageRepresentation(
             cv::Mat image = cv::Scalar(255) - negativeTS.generateFrame().image;
             cv::Mat undistorted;
             cv::undistort(image, undistorted, cameraMatrix, distortionCoefficients);
-            return undistorted;
-    });
+            return undistorted; });
 
     // Update positive time surface on main thread
     positive.accept(events);
@@ -202,18 +226,15 @@ vector<cv::Mat> rightImageRepresentation(
     // cv::waitKey(2);
 }
 
-void imageRepresentationCallback(const bool isLeft,
-                                 const cv::Size resolution,
-                                 const cv::Matx33f &cameraMatrix,
-                                 const vector<float> &distortionCoefficients,
-                                 queue<dv::EventStore> &incomingEvents,
-                                 queue<vector<cv::Mat>> &outgoingImages)
+void leftImageRepresentationCallback(const cv::Size resolution,
+                                     const cv::Matx33f &cameraMatrix,
+                                     const vector<float> &distortionCoefficients,
+                                     queue<dv::EventStore> &incomingEvents,
+                                     queue<tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>>> &outgoingImages)
 {
 
     dv::EventPolarityFilter leftPositive(true);
     dv::EventPolarityFilter leftNegative(false);
-    dv::EventPolarityFilter rightPositive(true);
-    dv::EventPolarityFilter rightNegative(false);
 
     dv::Accumulator leftPositiveTS(resolution);
     leftPositiveTS.setMinPotential(0.f);
@@ -235,6 +256,33 @@ void imageRepresentationCallback(const bool isLeft,
     leftNegativeTS.setIgnorePolarity(true);
     leftNegativeTS.setSynchronousDecay(true);
 
+    while (true)
+    {
+        if (!incomingEvents.empty())
+        {
+            auto events = incomingEvents.front();
+            incomingEvents.pop();
+
+            auto images = leftImageRepresentation(resolution, cameraMatrix, distortionCoefficients, leftPositive, leftNegative, leftPositiveTS, leftNegativeTS, events);
+            outgoingImages.push(images);
+        }
+        else
+        {
+            this_thread::sleep_for(2ms);
+        }
+    }
+}
+
+void rightImageRepresentationCallback(const cv::Size resolution,
+                                      const cv::Matx33f &cameraMatrix,
+                                      const vector<float> &distortionCoefficients,
+                                      queue<dv::EventStore> &incomingEvents,
+                                      queue<vector<cv::Mat>> &outgoingImages)
+{
+
+    dv::EventPolarityFilter rightPositive(true);
+    dv::EventPolarityFilter rightNegative(false);
+
     dv::Accumulator rightPositiveTS(resolution);
     rightPositiveTS.setMinPotential(0.f);
     rightPositiveTS.setMaxPotential(1.f);
@@ -255,40 +303,19 @@ void imageRepresentationCallback(const bool isLeft,
     rightNegativeTS.setIgnorePolarity(true);
     rightNegativeTS.setSynchronousDecay(true);
 
-    if (isLeft)
+    while (true)
     {
-        while (true)
+        if (!incomingEvents.empty())
         {
-            if (!incomingEvents.empty())
-            {
-                auto events = incomingEvents.front();
-                incomingEvents.pop();
+            auto events = incomingEvents.front();
+            incomingEvents.pop();
 
-                vector<cv::Mat> images = leftImageRepresentation(resolution, cameraMatrix, distortionCoefficients, leftPositive, leftNegative, leftPositiveTS, leftNegativeTS, events);
-                outgoingImages.push(images);
-            }
-            else
-            {
-                this_thread::sleep_for(2ms);
-            }
+            vector<cv::Mat> images = rightImageRepresentation(cameraMatrix, distortionCoefficients, rightPositive, rightNegative, rightPositiveTS, rightNegativeTS, events);
+            outgoingImages.push(images);
         }
-    }
-    else
-    {
-        while (true)
+        else
         {
-            if (!incomingEvents.empty())
-            {
-                auto events = incomingEvents.front();
-                incomingEvents.pop();
-
-                vector<cv::Mat> images = rightImageRepresentation(cameraMatrix, distortionCoefficients, rightPositive, rightNegative, rightPositiveTS, rightNegativeTS, events);
-                outgoingImages.push(images);
-            }
-            else
-            {
-                this_thread::sleep_for(2ms);
-            }
+            this_thread::sleep_for(2ms);
         }
     }
 }

@@ -48,8 +48,6 @@ tuple<cv::Mat, double> initalRotationFromGravity(vector<dv::IMU> imuReadings, cv
         gravity[0], gravity[1], gravity[2],
         z[0], z[1], z[2]);
 
-    cout << R*R.t() << endl;
-
     return {R, gnorm};
 }
 
