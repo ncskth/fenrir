@@ -12,27 +12,53 @@
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
 
+#include <boost/program_options.hpp>
+
+#include <cnpy.h>
+
 #include <iostream>
 #include <condition_variable>
 #include <future>
-
-#include <cnpy.h>
+#include <string>
 
 #include <cameraCapture.cpp>
 #include <tracking.cpp>
 #include <imageRepresentation.cpp>
+
+using namespace SlamDemo;
 
 using namespace std::chrono_literals;
 using namespace std;
 
 int main()
 {
-    //*
-    // Path to a stereo calibration file, replace with a file path on your local file system
-    const string calibrationFilePath = "/home/kadile/Projects/fenrir/mimir_jr_calibration.json";
+
+    namespace po = boost::program_options;
+
+    string calibJSONPath;
+    string hotPixelsDir;
+    int highPassMicroseconds;
+    double lowPassHz;
+    int readCameraMilliseconds;
+    int timeSurfaceMilliseconds;
+    int aaSurfacePatchesX;
+    int aaSurfacePatchesY;
+    int edgeFeatureDownsampling;
+
+    po::options_description desc("Allowed options");
+    desc.add_options()
+        ("calibration-json", po::value<std::string>(&calibJSONPath), "Camera calibration file written in JSON according to inivation standards")
+        ("hot-pixels-dir", po::value<std::string>(&hotPixelsDir), "In which directory to find numpy files describing which camera pixels are hot")
+        ("high-pass-us", po::value<int>(&highPassMicroseconds)->default_value(1000), "Background noise filter time constant in microseconds")
+        ("low-pass-hz", po::value<double>(&lowPassHz)->default_value(500.0), "Low pass filter frequency (inverse of refractory period)")
+        ("read-camera-ms", po::value<int>(&readCameraMilliseconds)->default_value(20), "Interval in milliseconds in which buffered data from the camera is sent to the rest of the system")
+        ("time-surface-ms", po::value<int>(&timeSurfaceMilliseconds)->default_value(30), "Decay constant of the time surfaces in milliseconds")
+        ("aa-patches-x", po::value<int>(&aaSurfacePatchesX)->default_value(8), "How many grid patches for adaptive accumulation, x axis")
+        ("aa-patches-y", po::value<int>(&aaSurfacePatchesY)->default_value(6), "How many grid patches for adaptive accumulation, y axis")
+        ("edge-feature-downsampling", po::value<int>(&edgeFeatureDownsampling)->default_value(100), "Minimum downsampling factor for converting (filtered) events into features for stereo matching");
 
     // Load the calibration file
-    auto calibration = dv::camera::CalibrationSet::LoadFromFile(calibrationFilePath);
+    auto calibration = dv::camera::CalibrationSet::LoadFromFile(calibJSONPath);
 
     // It is expected that calibration file will have "C0" as the leftEventBuffer camera
     auto leftCameraCalib = calibration.getCameraCalibration("C0").value();
@@ -64,29 +90,45 @@ int main()
 
     cv::Mat trajectoryVisualization = cv::Mat::zeros(400, 400, CV_8UC1);
 
-    thread cameraCaptureThread(&cameraCaptureCallback,
-                               resolution,
-                               leftCameraCalib.name,
-                               rightCameraCalib.name,
-                               "/home/kadile/Projects/fenrir/hot_pixels_mimir_jr",
-                               ref(leftEventQueue),
-                               ref(rightEventQueue),
-                               ref(imuQueue));
+    thread leftCameraCaptureThread(&leftCameraCapture,
+                                   resolution,
+                                   leftCameraCalib.name,
+                                   hotPixelsDir + "/hot_pixels_left_x.npy",
+                                   hotPixelsDir + "/hot_pixels_left_y.npy",
+                                   highPassMicroseconds,
+                                   lowPassHz,
+                                   readCameraMilliseconds,
+                                   ref(leftEventQueue),
+                                   ref(imuQueue));
+    thread rightCameraCaptureThread(&leftCameraCapture,
+                                    resolution,
+                                    leftCameraCalib.name,
+                                    hotPixelsDir + "/hot_pixels_right_x.npy",
+                                    hotPixelsDir + "/hot_pixels_right_y.npy",
+                                    highPassMicroseconds,
+                                    lowPassHz,
+                                    readCameraMilliseconds,
+                                    ref(leftEventQueue),
+                                    ref(imuQueue));
 
-    //thread trackingThread(&trackingCallback,
-    //                      gyroBias,
-    //                      accelBias,
-    //                      ref(imuQueue),
-    //                      ref(velocityVisQueue));
+    thread trackingThread(&imuPreintegration,
+                          gyroBias,
+                          accelBias,
+                          ref(imuQueue),
+                          ref(velocityVisQueue));
 
-    thread leftImageRepresentationThread(&leftImageRepresentationCallback,
+    thread leftImageRepresentationThread(&leftImageRepresentationLoop,
                                          resolution,
+                                         aaSurfacePatchesX,
+                                         aaSurfacePatchesY,
+                                         timeSurfaceMilliseconds,
                                          camMatL,
                                          distCoeffsL,
                                          ref(leftEventQueue),
                                          ref(leftImageQueue));
-    thread rightImageRepresentationThread(&rightImageRepresentationCallback,
+    thread rightImageRepresentationThread(&rightImageRepresentationLoop,
                                           resolution,
+                                          timeSurfaceMilliseconds,
                                           camMatR,
                                           distCoeffsR,
                                           ref(rightEventQueue),

@@ -15,6 +15,8 @@
 
 #include <cnpy.h>
 
+namespace SlamDemo {
+
 using namespace std::chrono_literals;
 using namespace std;
 
@@ -52,10 +54,10 @@ tuple<cv::Mat, double> initalRotationFromGravity(vector<dv::IMU> imuReadings, cv
 }
 
 
-void trackingCallback(const cv::Point3f gyroBias,
-                      const cv::Point3f accelBias,
-                      queue<vector<dv::IMU>>& incomingIMU,
-                      queue<cv::Mat>& outgoingVelocityVis) {
+void imuPreintegration(const cv::Point3f gyroBias,
+                       const cv::Point3f accelBias,
+                       queue<vector<dv::IMU>>& incomingIMU,
+                       queue<cv::Mat>& outgoingVelocityVis) {
 
     while(incomingIMU.empty()) {
         this_thread::sleep_for(1ms);
@@ -125,4 +127,5 @@ void trackingCallback(const cv::Point3f gyroBias,
         }
     }
 
+}
 }

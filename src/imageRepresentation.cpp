@@ -13,6 +13,8 @@
 #include <iostream>
 #include <queue>
 
+namespace SlamDemo {
+
 using namespace std;
 using namespace std::chrono_literals;
 
@@ -123,6 +125,8 @@ tuple<double, double> sobelAtPoint(cv::Mat img, int y, int x)
 
 tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>> leftImageRepresentation(
     const cv::Size resolution,
+    const int aaPatchesX,
+    const int aaPatchesY,
     const cv::Matx33f cameraMatrix,
     const vector<float> distortionCoefficients,
     auto &positive,
@@ -141,19 +145,21 @@ tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>> leftImageRepresenta
         cv::Mat posTS;
         cv::undistort(posTSDistorted, posTS, cameraMatrix, distortionCoefficients);
 
-        return posTS; });
+        return posTS;
+    });
 
     auto negFuture = async(launch::async, [&]()
                            {
-    negative.accept(events);
-    const auto negativeEvents = negative.generateEvents();
-    negativeTS.accept(negativeEvents);
-    cv::Mat image = cv::Scalar(255) - negativeTS.generateFrame().image;
-    cv::Mat negTS;
-    cv::undistort(image, negTS, cameraMatrix, distortionCoefficients);
-    return negTS; });
+        negative.accept(events);
+        const auto negativeEvents = negative.generateEvents();
+        negativeTS.accept(negativeEvents);
+        cv::Mat image = cv::Scalar(255) - negativeTS.generateFrame().image;
+        cv::Mat negTS;
+        cv::undistort(image, negTS, cameraMatrix, distortionCoefficients);
+        return negTS;
+    });
 
-    cv::Mat image = adaptiveAccumulation(resolution, 8, 6, events);
+    cv::Mat image = adaptiveAccumulation(resolution, aaPatchesX, aaPatchesY, events);
     cv::Mat aa;
     cv::undistort(image, aa, cameraMatrix, distortionCoefficients);
 
@@ -226,11 +232,14 @@ vector<cv::Mat> rightImageRepresentation(
     // cv::waitKey(2);
 }
 
-void leftImageRepresentationCallback(const cv::Size resolution,
-                                     const cv::Matx33f &cameraMatrix,
-                                     const vector<float> &distortionCoefficients,
-                                     queue<dv::EventStore> &incomingEvents,
-                                     queue<tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>>> &outgoingImages)
+void leftImageRepresentationLoop(const cv::Size resolution,
+                                 const int aaPatchesX,
+                                 const int aaPatchesY,
+                                 const int timeSurfaceMilliseconds,
+                                 const cv::Matx33f &cameraMatrix,
+                                 const vector<float> &distortionCoefficients,
+                                 queue<dv::EventStore> &incomingEvents,
+                                 queue<tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>>> &outgoingImages)
 {
 
     dv::EventPolarityFilter leftPositive(true);
@@ -242,7 +251,7 @@ void leftImageRepresentationCallback(const cv::Size resolution,
     leftPositiveTS.setNeutralPotential(0.f);
     leftPositiveTS.setEventContribution(1.f);
     leftPositiveTS.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
-    leftPositiveTS.setDecayParam(3e+4);
+    leftPositiveTS.setDecayParam(1e3*timeSurfaceMilliseconds);
     leftPositiveTS.setIgnorePolarity(true);
     leftPositiveTS.setSynchronousDecay(true);
 
@@ -252,7 +261,7 @@ void leftImageRepresentationCallback(const cv::Size resolution,
     leftNegativeTS.setNeutralPotential(0.f);
     leftNegativeTS.setEventContribution(1.f);
     leftNegativeTS.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
-    leftNegativeTS.setDecayParam(3e+4);
+    leftNegativeTS.setDecayParam(1e3*timeSurfaceMilliseconds);
     leftNegativeTS.setIgnorePolarity(true);
     leftNegativeTS.setSynchronousDecay(true);
 
@@ -263,7 +272,16 @@ void leftImageRepresentationCallback(const cv::Size resolution,
             auto events = incomingEvents.front();
             incomingEvents.pop();
 
-            auto images = leftImageRepresentation(resolution, cameraMatrix, distortionCoefficients, leftPositive, leftNegative, leftPositiveTS, leftNegativeTS, events);
+            auto images = leftImageRepresentation(resolution,
+                                                  aaPatchesX,
+                                                  aaPatchesY,
+                                                  cameraMatrix,
+                                                  distortionCoefficients,
+                                                  leftPositive,
+                                                  leftNegative,
+                                                  leftPositiveTS,
+                                                  leftNegativeTS,
+                                                  events);
             outgoingImages.push(images);
         }
         else
@@ -273,11 +291,12 @@ void leftImageRepresentationCallback(const cv::Size resolution,
     }
 }
 
-void rightImageRepresentationCallback(const cv::Size resolution,
-                                      const cv::Matx33f &cameraMatrix,
-                                      const vector<float> &distortionCoefficients,
-                                      queue<dv::EventStore> &incomingEvents,
-                                      queue<vector<cv::Mat>> &outgoingImages)
+void rightImageRepresentationLoop(const cv::Size resolution,
+                                  const int timeSurfaceMilliseconds,
+                                  const cv::Matx33f &cameraMatrix,
+                                  const vector<float> &distortionCoefficients,
+                                  queue<dv::EventStore> &incomingEvents,
+                                  queue<vector<cv::Mat>> &outgoingImages)
 {
 
     dv::EventPolarityFilter rightPositive(true);
@@ -289,7 +308,7 @@ void rightImageRepresentationCallback(const cv::Size resolution,
     rightPositiveTS.setNeutralPotential(0.f);
     rightPositiveTS.setEventContribution(1.f);
     rightPositiveTS.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
-    rightPositiveTS.setDecayParam(3e+4);
+    rightPositiveTS.setDecayParam(1e3*timeSurfaceMilliseconds);
     rightPositiveTS.setIgnorePolarity(true);
     rightPositiveTS.setSynchronousDecay(true);
 
@@ -299,7 +318,7 @@ void rightImageRepresentationCallback(const cv::Size resolution,
     rightNegativeTS.setNeutralPotential(0.f);
     rightNegativeTS.setEventContribution(1.f);
     rightNegativeTS.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
-    rightNegativeTS.setDecayParam(3e+4);
+    rightNegativeTS.setDecayParam(1e3*timeSurfaceMilliseconds);
     rightNegativeTS.setIgnorePolarity(true);
     rightNegativeTS.setSynchronousDecay(true);
 
@@ -310,7 +329,13 @@ void rightImageRepresentationCallback(const cv::Size resolution,
             auto events = incomingEvents.front();
             incomingEvents.pop();
 
-            vector<cv::Mat> images = rightImageRepresentation(cameraMatrix, distortionCoefficients, rightPositive, rightNegative, rightPositiveTS, rightNegativeTS, events);
+            vector<cv::Mat> images = rightImageRepresentation(cameraMatrix,
+                                                              distortionCoefficients,
+                                                              rightPositive,
+                                                              rightNegative,
+                                                              rightPositiveTS,
+                                                              rightNegativeTS,
+                                                              events);
             outgoingImages.push(images);
         }
         else
@@ -318,4 +343,5 @@ void rightImageRepresentationCallback(const cv::Size resolution,
             this_thread::sleep_for(2ms);
         }
     }
+}
 }

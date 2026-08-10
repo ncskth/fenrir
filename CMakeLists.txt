@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 project(SlamDemo)
 
+set(OpenCV_FIND_REQUIRED_COMPONENTS core imgproc highgui)
+find_package(Boost REQUIRED COMPONENTS program_options)
 find_package(dv-processing REQUIRED)
 find_package(OpenCV REQUIRED)
 
@@ -26,8 +28,9 @@ add_executable(IMUBias src/printImuBias.cpp)
 
 target_link_libraries(SlamDemo PUBLIC
     dv::processing
-    opencv_core
+    ${OpenCV_LIBS}    # Changed from opencv_core
     cnpy_imported
+    Boost::program_options
 )
 target_link_libraries(CopyPaste PUBLIC
     dv::processing
