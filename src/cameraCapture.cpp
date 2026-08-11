@@ -12,6 +12,7 @@
 #include <iostream>
 #include <condition_variable>
 #include <future>
+#include <barrier>
 
 #include <cnpy.h>
 
@@ -20,12 +21,7 @@ namespace SlamDemo {
 using namespace std::chrono_literals;
 using namespace std;
 
-mutex leftCameraMutex;
-condition_variable leftCameraCondition;
-bool leftCameraReady = false;
-mutex rightCameraMutex;
-condition_variable rightCameraCondition;
-bool rightCameraReady = false;
+barrier sync_point(2);
 
 void rightCameraCapture(const cv::Size resolution,
                         const string serial,
@@ -56,14 +52,12 @@ void rightCameraCapture(const cv::Size resolution,
         int y = hotPixelsY.data<int>()[i];
         mask.at<uchar>(x, y) = 0;
     }
-    dv::EventMaskFilter maskFilter(mask.t());
+    dv::EventMaskFilter maskFilter(mask);
 
     dv::EventStore eventBuffer;
 
-    rightCameraReady = true;
-    unique_lock lk(rightCameraMutex);
-    rightCameraCondition.wait(lk, []{return leftCameraReady;});
-    rightCameraReady = false;
+    cout << "Right camera ready!" << endl;
+    sync_point.arrive_and_wait();
 
     auto lastQPush = chrono::high_resolution_clock::now();
 
@@ -79,15 +73,13 @@ void rightCameraCapture(const cv::Size resolution,
         }
 
         auto now = chrono::high_resolution_clock::now();
-        if (now - lastQPush > sendIntervalMilliseconds * 1ms) {
+        if (now - lastQPush > sendIntervalMilliseconds * 1ms && eventBuffer.size() > 1) {
+            //cout << eventBuffer.size() << " left events" << endl;
             outgoingEvents.push(eventBuffer);
             eventBuffer = dv::EventStore();
-            lastQPush = now;
 
-            rightCameraReady = true;
-            unique_lock lk(rightCameraMutex);
-            rightCameraCondition.wait(lk, []{return leftCameraReady;});
-            rightCameraReady = false;
+            sync_point.arrive_and_wait();
+            lastQPush = now;
         }
     }
 }
@@ -125,15 +117,13 @@ void leftCameraCapture(const cv::Size resolution,
         int y = hotPixelsY.data<int>()[i];
         mask.at<uchar>(x, y) = 0;
     }
-    dv::EventMaskFilter maskFilter(mask.t());
+    dv::EventMaskFilter maskFilter(mask);
 
     dv::EventStore eventBuffer;
     vector<dv::IMU> imuBuffer;
 
-    leftCameraReady = true;
-    unique_lock lk(leftCameraMutex);
-    leftCameraCondition.wait(lk, []{return rightCameraReady;});
-    leftCameraReady = false;
+    cout << "Left camera ready!" << endl;
+    sync_point.arrive_and_wait();
 
     auto lastQPush = chrono::high_resolution_clock::now();
 
@@ -153,17 +143,15 @@ void leftCameraCapture(const cv::Size resolution,
         }
 
         auto now = chrono::high_resolution_clock::now();
-        if (now - lastQPush > sendIntervalMilliseconds * 1ms) {
+        if (now - lastQPush > sendIntervalMilliseconds * 1ms && imuBuffer.size() > 1 && eventBuffer.size() > 1) {
+            //cout << eventBuffer.size() << " right events" << endl;
             outgoingEvents.push(eventBuffer);
             eventBuffer = dv::EventStore();
             outgoingIMU.push(imuBuffer);
             imuBuffer.clear();
-            lastQPush = now;
 
-            leftCameraReady = true;
-            unique_lock lk(leftCameraMutex);
-            leftCameraCondition.wait(lk, []{return rightCameraReady;});
-            leftCameraReady = false;
+            sync_point.arrive_and_wait();
+            lastQPush = now;
         }
     }
 }
