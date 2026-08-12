@@ -1,20 +1,4 @@
-#include <dv-processing/io/camera/discovery.hpp>
-#include <dv-processing/visualization/event_visualizer.hpp>
-#include <dv-processing/data/generate.hpp>
-#include <dv-processing/noise/background_activity_noise_filter.hpp>
-#include <dv-processing/noise/frequency_filters.hpp>
-#include <dv-processing/core/core.hpp>
-#include <dv-processing/camera/calibration_set.hpp>
-
-#include <opencv2/highgui.hpp>
-
-#include <queue>
-#include <iostream>
-#include <condition_variable>
-#include <future>
-#include <barrier>
-
-#include <cnpy.h>
+#include <cameraCapture.h>
 
 namespace SlamDemo {
 
@@ -23,15 +7,16 @@ using namespace std;
 
 barrier sync_point(2);
 
-void rightCameraCapture(const cv::Size resolution,
-                        const string serial,
-                        const string hotPixelXFile,
-                        const string hotPixelYFile,
-                        const int highPassMicroseconds,
-                        const double lowPassHz,
-                        const int sendIntervalMilliseconds,
-                        queue<dv::EventStore>& outgoingEvents
-                        ) {
+void rightCameraCapture(
+    const cv::Size resolution,
+    const string serial,
+    const string hotPixelXFile,
+    const string hotPixelYFile,
+    const int highPassMicroseconds,
+    const double lowPassHz,
+    const int sendIntervalMilliseconds,
+    queue<dv::EventStore>& outgoingEvents
+    ) {
 
     // Open the stereo camera with camera names from calibration
     auto camera  = dv::io::camera::open(serial);
@@ -74,7 +59,7 @@ void rightCameraCapture(const cv::Size resolution,
 
         auto now = chrono::high_resolution_clock::now();
         if (now - lastQPush > sendIntervalMilliseconds * 1ms && eventBuffer.size() > 1) {
-            //cout << eventBuffer.size() << " left events" << endl;
+            cout << "Right captured " << eventBuffer.size() << " events" << endl;
             outgoingEvents.push(eventBuffer);
             eventBuffer = dv::EventStore();
 
@@ -84,16 +69,17 @@ void rightCameraCapture(const cv::Size resolution,
     }
 }
 
-void leftCameraCapture(const cv::Size resolution,
-                       const string serial,
-                       const string hotPixelXFile,
-                       const string hotPixelYFile,
-                       const int highPassMicroseconds,
-                       const double lowPassHz,
-                       const int sendIntervalMilliseconds,
-                       queue<dv::EventStore>& outgoingEvents,
-                       queue<vector<dv::IMU>>& outgoingIMU
-                       ) {
+void leftCameraCapture(
+    const cv::Size resolution,
+    const string serial,
+    const string hotPixelXFile,
+    const string hotPixelYFile,
+    const int highPassMicroseconds,
+    const double lowPassHz,
+    const int sendIntervalMilliseconds,
+    queue<dv::EventStore>& outgoingEvents,
+    queue<vector<dv::IMU>>& outgoingIMU
+    ) {
 
     // Open the stereo camera with camera names from calibration
     auto camera  = dv::io::camera::open(serial);
@@ -145,6 +131,7 @@ void leftCameraCapture(const cv::Size resolution,
         auto now = chrono::high_resolution_clock::now();
         if (now - lastQPush > sendIntervalMilliseconds * 1ms && imuBuffer.size() > 1 && eventBuffer.size() > 1) {
             //cout << eventBuffer.size() << " right events" << endl;
+            cout << "Left captured " << eventBuffer.size() << " events" << endl;
             outgoingEvents.push(eventBuffer);
             eventBuffer = dv::EventStore();
             outgoingIMU.push(imuBuffer);

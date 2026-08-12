@@ -21,9 +21,10 @@
 #include <future>
 #include <string>
 
-#include <cameraCapture.cpp>
-#include <tracking.cpp>
-#include <imageRepresentation.cpp>
+#include <cameraCapture.h>
+#include <imageRepresentation.h>
+#include <tracking.h>
+#include <mapping.h>
 
 using namespace SlamDemo;
 
@@ -44,6 +45,10 @@ int main(int argc, char* argv[])
     int aaSurfacePatchesX;
     int aaSurfacePatchesY;
     int edgeFeatureDownsampling;
+    double minBlockVariance;
+    double minBlockCorrelation;
+    size_t sbmHalfBlockSize;
+    size_t sbmSearchBound;
 
     po::options_description desc("Allowed options");
     desc.add_options()
@@ -55,7 +60,11 @@ int main(int argc, char* argv[])
         ("time-surface-ms", po::value<int>(&timeSurfaceMilliseconds)->default_value(30), "Decay constant of the time surfaces in milliseconds")
         ("aa-patches-x", po::value<int>(&aaSurfacePatchesX)->default_value(4), "How many grid patches for adaptive accumulation, x axis")
         ("aa-patches-y", po::value<int>(&aaSurfacePatchesY)->default_value(3), "How many grid patches for adaptive accumulation, y axis")
-        ("edge-feature-downsampling", po::value<int>(&edgeFeatureDownsampling)->default_value(500), "Minimum downsampling factor for converting (filtered) events into features for stereo matching");
+        ("edge-feature-downsampling", po::value<int>(&edgeFeatureDownsampling)->default_value(10), "Minimum downsampling factor for converting (filtered) events into features for stereo matching"),
+        ("min-block-variance", po::value<double>(&minBlockVariance)->default_value(.1), "Minimum variance that a time surface patch must possess to be matched."),
+        ("min-block-correlaion", po::value<double>(&minBlockCorrelation)->default_value(.5), "Minimum correlation between two matched blocks in stereo block matching."),
+        ("sbm-search-bound", po::value<size_t>(&sbmHalfBlockSize)->default_value(12), "Block side length used in SBM minus 1 divided by two."),
+        ("sbm-search-bound", po::value<size_t>(&sbmSearchBound)->default_value(100), "Matching a block from the left camera will check at most this many blocks from the right camera.");
 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -70,6 +79,9 @@ int main(int argc, char* argv[])
     cout << "Adaptive accumulation patches X: " << aaSurfacePatchesX << endl;
     cout << "Adaptive accumulation patches Y: " << aaSurfacePatchesY << endl;
     cout << "Downsampling rate for edge feature detection: " << edgeFeatureDownsampling << endl;
+    cout << "Minimum block variance for SBM: " << minBlockVariance << endl;
+    cout << "Minimum block correlation for SBM: " << minBlockCorrelation << endl;
+    cout << "SBM search bound: " << sbmSearchBound << endl;
     auto calibration = dv::camera::CalibrationSet::LoadFromFile(calibJSONPath);
 
     // It is expected that calibration file will have "C0" as the leftEventBuffer camera
@@ -91,6 +103,7 @@ int main(int argc, char* argv[])
     cv::namedWindow("Left", cv::WINDOW_NORMAL);
     cv::namedWindow("Right", cv::WINDOW_NORMAL);
     cv::namedWindow("Trajectory", cv::WINDOW_NORMAL);
+    cv::namedWindow("Depth", cv::WINDOW_NORMAL);
 
     queue<dv::EventStore> leftEventQueue;
     queue<dv::EventStore> rightEventQueue;
@@ -99,6 +112,9 @@ int main(int argc, char* argv[])
     //vector<cv::Affine3d> poseTrajectory;
     queue<tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>>> leftImageToRender;
     queue<vector<cv::Mat>> rightImageToRender;
+    queue<tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>>> leftImageToMapping;
+    queue<vector<cv::Mat>> rightImageToMapping;
+    queue<vector<cv::Mat>> depthImageQueue;
 
     cv::Mat trajectoryVisualization = cv::Mat::zeros(400, 400, CV_8UC1);
 
@@ -137,14 +153,28 @@ int main(int argc, char* argv[])
                                          camMatL,
                                          distCoeffsL,
                                          ref(leftEventQueue),
-                                         ref(leftImageToRender));
+                                         ref(leftImageToRender),
+                                         ref(leftImageToMapping));
     thread rightImageRepresentationThread(&rightImageRepresentationLoop,
                                           resolution,
                                           timeSurfaceMilliseconds,
                                           camMatR,
                                           distCoeffsR,
                                           ref(rightEventQueue),
-                                          ref(rightImageToRender));
+                                          ref(rightImageToRender),
+                                          ref(rightImageToMapping));
+
+    thread depthEstimationThread(
+        &depthEstimationLoop,
+        minBlockVariance,
+        minBlockCorrelation,
+        resolution,
+        sbmHalfBlockSize,
+        sbmSearchBound,
+        ref(leftImageToMapping),
+        ref(rightImageToMapping),
+        ref(depthImageQueue)
+    );
 
     // Run the processing loop while both cameras are connected
     while (true) {
@@ -158,31 +188,22 @@ int main(int argc, char* argv[])
             cv::Mat leftImage;
             cv::vconcat(get<0>(leftqFront)[0], get<0>(leftqFront)[1], leftImage);
             cv::vconcat(leftImage, get<0>(leftqFront)[2], leftImage);
-            cv::Mat leftImageBGR;
-            cv::cvtColor(leftImage, leftImageBGR, cv::COLOR_GRAY2BGR);
 
-            for(auto ev : get<1>(leftqFront)) {
-                for(int i = max(0, (int)ev.x() - 2); i < min(resolution.width, (int)ev.x() + 3); i++) {
-                    for(int j = max(0, (int)ev.y() - 2); j < min(resolution.height, (int)ev.y() + 3); j++) {
-                        leftImageBGR.at<cv::Vec3b>(j, i) = cv::Vec3b(255, 0, 0);
-                    }
-                }
-            }
-            for(auto ev : get<2>(leftqFront)) {
-                for(int i = max(0, (int)ev.x() - 2); i < min(resolution.width, (int)ev.x() + 3); i++) {
-                    for(int j = max(0, (int)ev.y() - 2); j < min(resolution.height, (int)ev.y() + 3); j++) {
-                        leftImageBGR.at<cv::Vec3b>(j, i) = cv::Vec3b(0, 0, 255);
-                    }
-                }
-            }
-
-            cv::imshow("Left", leftImageBGR);
+            cv::imshow("Left", leftImage);
             cv::imshow("Right", rightImage);
         }
         if (!velocityVisQueue.empty()) {
             cv::Mat trajectoryVisualization = velocityVisQueue.front();
             velocityVisQueue.pop();
             cv::imshow("Trajectory", trajectoryVisualization);
+        }
+        if(!depthImageQueue.empty()) {
+            auto depthImages = depthImageQueue.front();
+            depthImageQueue.pop();
+            cv::Mat depthImage;
+            cv::vconcat(depthImages[0], depthImages[1], depthImage);
+            cv::vconcat(depthImage, depthImages[2], depthImage);
+            cv::imshow("Depth", depthImage);
         }
         // Wait for a small amount of time to avoid CPU overhaul
         cv::waitKey(2);

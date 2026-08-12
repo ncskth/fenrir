@@ -1,29 +1,15 @@
-#include <dv-processing/io/camera/discovery.hpp>
-#include <dv-processing/visualization/event_visualizer.hpp>
-#include <dv-processing/data/generate.hpp>
-#include <dv-processing/noise/background_activity_noise_filter.hpp>
-#include <dv-processing/noise/frequency_filters.hpp>
-#include <dv-processing/core/core.hpp>
-#include <dv-processing/camera/calibration_set.hpp>
-#include <dv-processing/core/stereo_event_stream_slicer.hpp>
-#include <dv-processing/depth/semi_dense_stereo_matcher.hpp>
-
-#include <opencv2/highgui.hpp>
-
-#include <iostream>
-#include <queue>
+#include <imageRepresentation.h>
 
 namespace SlamDemo {
 
 using namespace std;
 using namespace std::chrono_literals;
 
-cv::Mat adaptiveAccumulation(cv::Size resolution,
-                             int x_patches,
-                             int y_patches,
-                             // cv::Array undistort_map1,
-                             // cv::Array undistort_map2,
-                             const dv::EventStore events)
+cv::Mat adaptiveAccumulation(
+    cv::Size resolution,
+    int x_patches,
+    int y_patches,
+    const dv::EventStore events)
 {
 
     int n_events = events.size();
@@ -170,11 +156,11 @@ tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>> leftImageRepresenta
         if (aa.at<uchar>(ev.y(), ev.x()) > 200 && ev.x() > 0 && ev.x() < resolution.width - 1 && ev.y() > 0 && ev.y() < resolution.height - 1)
         {
             auto sobel = sobelAtPoint(aa, ev.x(), ev.y());
-            if (abs(get<0>(sobel)) > 2.0 * abs(get<1>(sobel)))
+            if (abs(get<0>(sobel)) > abs(get<1>(sobel)))
             {
                 dx_events.push_back(ev);
             }
-            else if (abs(get<1>(sobel)) > 2.0 * abs(get<0>(sobel)))
+            else if (abs(get<1>(sobel)) > abs(get<0>(sobel)))
             {
                 dy_events.push_back(ev);
             }
@@ -218,15 +204,17 @@ vector<cv::Mat> rightImageRepresentation(
     return result;
 }
 
-void leftImageRepresentationLoop(const cv::Size resolution,
-                                 const int aaPatchesX,
-                                 const int aaPatchesY,
-                                 const int downsampleFactor,
-                                 const int timeSurfaceMilliseconds,
-                                 const cv::Matx33f &cameraMatrix,
-                                 const vector<float> &distortionCoefficients,
-                                 queue<dv::EventStore> &incomingEvents,
-                                 queue<tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>>> &outgoingImages)
+void leftImageRepresentationLoop(
+    const cv::Size resolution,
+    const int aaPatchesX,
+    const int aaPatchesY,
+    const int downsampleFactor,
+    const int timeSurfaceMilliseconds,
+    const cv::Matx33f &cameraMatrix,
+    const vector<float> &distortionCoefficients,
+    queue<dv::EventStore> &incomingEvents,
+    queue<tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>>> &outgoingImages1,
+    queue<tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>>> &outgoingImages2)
 {
 
     vector<int64_t> lastPositiveTimestamps(resolution.area());
@@ -249,7 +237,8 @@ void leftImageRepresentationLoop(const cv::Size resolution,
                                                   ref(lastPositiveTimestamps),
                                                   ref(lastNegativeTimestamps),
                                                   events);
-            outgoingImages.push(images);
+            outgoingImages1.push(images);
+            outgoingImages2.push(images);
         }
         else
         {
@@ -263,7 +252,8 @@ void rightImageRepresentationLoop(const cv::Size resolution,
                                   const cv::Matx33f &cameraMatrix,
                                   const vector<float> &distortionCoefficients,
                                   queue<dv::EventStore> &incomingEvents,
-                                  queue<vector<cv::Mat>> &outgoingImages)
+                                  queue<vector<cv::Mat>> &outgoingImages1,
+                                  queue<vector<cv::Mat>> &outgoingImages2)
 {
 
     vector<int64_t> lastPositiveTimestamps(resolution.area());
@@ -283,7 +273,8 @@ void rightImageRepresentationLoop(const cv::Size resolution,
                                                               ref(lastPositiveTimestamps),
                                                               ref(lastNegativeTimestamps),
                                                               events);
-            outgoingImages.push(images);
+            outgoingImages1.push(images);
+            outgoingImages2.push(images);
         }
         else
         {

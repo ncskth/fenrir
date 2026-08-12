@@ -21,8 +21,11 @@ else()
 endif()
 
 add_executable(SlamDemo src/slamDemo.cpp
-    src/mapping.cpp)
-target_include_directories(SlamDemo PRIVATE src)
+    src/cameraCapture.cpp
+    src/tracking.cpp
+    src/mapping.cpp
+    src/imageRepresentation.cpp)
+target_include_directories(SlamDemo PRIVATE include)
 add_executable(CopyPaste src/inivation_copypaste.cpp)
 add_executable(Calibration src/calibration.cpp)
 add_executable(IMUBias src/printImuBias.cpp)

@@ -1,19 +1,4 @@
-#include <dv-processing/io/camera/discovery.hpp>
-#include <dv-processing/visualization/event_visualizer.hpp>
-#include <dv-processing/data/generate.hpp>
-#include <dv-processing/noise/background_activity_noise_filter.hpp>
-#include <dv-processing/noise/frequency_filters.hpp>
-#include <dv-processing/core/core.hpp>
-#include <dv-processing/camera/calibration_set.hpp>
-
-#include <opencv2/highgui.hpp>
-
-#include <queue>
-#include <iostream>
-#include <condition_variable>
-#include <future>
-
-#include <cnpy.h>
+#include <tracking.h>
 
 namespace SlamDemo {
 
@@ -54,10 +39,11 @@ tuple<cv::Mat, double> initalRotationFromGravity(vector<dv::IMU> imuReadings, cv
 }
 
 
-void imuPreintegration(const cv::Point3f gyroBias,
-                       const cv::Point3f accelBias,
-                       queue<vector<dv::IMU>>& incomingIMU,
-                       queue<cv::Mat>& outgoingVelocityVis) {
+void imuPreintegration(
+    const cv::Point3f gyroBias,
+    const cv::Point3f accelBias,
+    queue<vector<dv::IMU>>& incomingIMU,
+    queue<cv::Mat>& outgoingVelocityVis) {
 
     while(incomingIMU.empty()) {
         this_thread::sleep_for(1ms);
