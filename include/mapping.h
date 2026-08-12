@@ -8,18 +8,18 @@ namespace SlamDemo {
     using namespace std;
 
     struct StereoBlockMatchingResult {
-        vector<size_t> x;
-        vector<size_t> y;
+        vector<int> x;
+        vector<int> y;
         vector<int> match;
         vector<double> correlation;
     };
 
     void singleBlockCrossCorrelation(
         const cv::Size resolution,
-        const size_t halfBlockSize,
-        const size_t searchBound,
-        const size_t centerX,
-        const size_t centerY,
+        const int halfBlockSize,
+        const int searchBound,
+        const int centerX,
+        const int centerY,
         const cv::Mat& combinedTSLeft,
         const cv::Mat& combinedTSRight,
         cv::Scalar& leftVarianceAtBlock,
@@ -41,12 +41,12 @@ namespace SlamDemo {
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
-        const size_t halfBlockSize,
-        const size_t searchBound,
+        const int halfBlockSize,
+        const int searchBound,
         const cv::Mat& combinedTSLeft,
         const cv::Mat& combinedTSRight,
-        const vector<size_t>& xCenters,
-        const vector<size_t>& yCenters,
+        const vector<int>& xCenters,
+        const vector<int>& yCenters,
         vector<cv::Scalar>& leftVariances,
         vector<vector<cv::Scalar>>& rightVariances,
         vector<vector<cv::Scalar>>& covariances,
@@ -58,8 +58,8 @@ namespace SlamDemo {
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
-        const size_t halfBlockSize,
-        const size_t searchBound,
+        const int halfBlockSize,
+        const int searchBound,
         const cv::Mat& combinedTSLeft,
         const cv::Mat& combinedTSRight,
         const vector<dv::Event> eventsToMatch
@@ -67,7 +67,7 @@ namespace SlamDemo {
 
     cv::Mat drawBlockMatchingResult(
         const cv::Size resolution,
-        const size_t searchBound,
+        const int searchBound,
         const StereoBlockMatchingResult sbmResult
     );
 
@@ -75,8 +75,8 @@ namespace SlamDemo {
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
-        const size_t halfBlockSize,
-        const size_t searchBound,
+        const int halfBlockSize,
+        const int searchBound,
         queue<tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>>>& incomingLeftData,
         queue<vector<cv::Mat>>& incomingRightData,
         queue<vector<cv::Mat>>& outgoingImages

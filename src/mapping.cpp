@@ -7,21 +7,22 @@ namespace SlamDemo {
 
     void singleBlockCrossCorrelation(
         const cv::Size resolution,
-        const size_t halfBlockSize,
-        const size_t searchBound,
-        const size_t centerX,
-        const size_t centerY,
+        const int halfBlockSize,
+        const int searchBound,
+        const int centerX,
+        const int centerY,
         const cv::Mat& combinedTSLeft,
         const cv::Mat& combinedTSRight,
         cv::Scalar& leftVarianceAtBlock,
         vector<cv::Scalar>& rightVarianceAtDisparity,
         vector<cv::Scalar>& covarianceAtDisparity
     ) {
-        size_t blockSize = 2*halfBlockSize + 1;
-        size_t blockArea = blockSize*blockSize;
-        size_t leftX = centerX - halfBlockSize;
-        size_t topY = centerY - halfBlockSize;
+        int blockSize = 2*halfBlockSize + 1;
+        int blockArea = blockSize*blockSize;
+        int leftX = centerX - halfBlockSize;
+        int topY = centerY - halfBlockSize;
         cv::Rect leftRect(leftX, topY, blockSize, blockSize);
+        cout << "Left rectangle: " << leftRect << endl;
 
         cv::Mat leftPatch = combinedTSLeft(leftRect);
         cv::Scalar leftMean;
@@ -29,7 +30,7 @@ namespace SlamDemo {
         cv::Mat znPatch = leftPatch - leftMean;
         leftVarianceAtBlock = cv::sum(znPatch.mul(znPatch))/((double)blockArea);
 
-        size_t numSearches = min(searchBound, 1 + leftX);
+        int numSearches = min(searchBound, 1 + leftX);
 
         cv::Rect rightRect = leftRect;
         cv::Mat rightPatch = combinedTSRight(rightRect);
@@ -41,7 +42,8 @@ namespace SlamDemo {
         covarianceAtDisparity.push_back(covariance);
         cv::Mat lastPatch = rightPatch;
 
-        for(size_t disparity = 1; disparity < numSearches; disparity++) {
+        cout << "Covariance vector length before search: " << covarianceAtDisparity.size() << endl;
+        for(int disparity = 1; disparity < numSearches; disparity++) {
             rightRect = cv::Rect(leftX - disparity, topY, blockSize, blockSize);
             rightPatch = combinedTSRight(rightRect);
             cv::Mat lastCol = lastPatch.col(blockSize - 1);
@@ -58,6 +60,7 @@ namespace SlamDemo {
             covariance = (cv::sum(leftPatch.mul(rightPatch)) - leftMean*sumIntensity)/((double)blockArea);
             covarianceAtDisparity.push_back(covariance);
         }
+        cout << "Covariance vector length after search: " << covarianceAtDisparity.size() << endl;
     }
 
     void singleBlockSearch(
@@ -73,16 +76,20 @@ namespace SlamDemo {
         match = -1;
         bestCorrelation = 0.;
         if(leftVarianceAtBlock[0] < minVariance) {
+            cout << "Left patch did not pass disparity check!" << endl;
             return;
         }
 
-        for(size_t disparity = 0; disparity < covarianceAtDisparity.size(); disparity++) {
+        for(int disparity = 0; disparity < covarianceAtDisparity.size(); disparity++) {
             if(rightVarianceAtDisparity[disparity][0] > minVariance) {
                 double corr = covarianceAtDisparity[disparity][0]/(sqrt(leftVarianceAtBlock[0]*rightVarianceAtDisparity[disparity][0]));
+                cout << "Correlation: " << corr << endl;
                 if(corr > minCorrelation && corr > bestCorrelation) {
                     match = (int)disparity;
                     corr = bestCorrelation;
                 }
+            } else {
+                cout << "Right patch did not pass disparity check!" << endl;
             }
         }
     }
@@ -91,21 +98,21 @@ namespace SlamDemo {
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
-        const size_t halfBlockSize,
-        const size_t searchBound,
+        const int halfBlockSize,
+        const int searchBound,
         const cv::Mat& combinedTSLeft,
         const cv::Mat& combinedTSRight,
-        const vector<size_t>& xCenters,
-        const vector<size_t>& yCenters,
+        const vector<int>& xCenters,
+        const vector<int>& yCenters,
         vector<cv::Scalar>& leftVariances,
         vector<vector<cv::Scalar>>& rightVariances,
         vector<vector<cv::Scalar>>& covariances,
         vector<int>& matches,
         vector<double>& correlations
     ) {
-        size_t numBlocks = xCenters.size();
+        int numBlocks = xCenters.size();
 
-        for(size_t i = 0; i < numBlocks; i++) {
+        for(int i = 0; i < numBlocks; i++) {
             singleBlockCrossCorrelation(
                 resolution,
                 halfBlockSize,
@@ -134,28 +141,28 @@ namespace SlamDemo {
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
-        const size_t halfBlockSize,
-        const size_t searchBound,
+        const int halfBlockSize,
+        const int searchBound,
         const cv::Mat& combinedTSLeft,
         const cv::Mat& combinedTSRight,
         const vector<dv::Event> eventsToMatch
     ) {
         // avoid matching events which are at the edge of the image
-        vector<size_t> xCenters, yCenters;
+        vector<int> xCenters, yCenters;
         for(auto ev: eventsToMatch) {
             if(ev.x() >= halfBlockSize && ev.y() >= halfBlockSize && ev.x() < resolution.width - halfBlockSize && ev.y() < resolution.height - halfBlockSize) {
-                xCenters.push_back((size_t)ev.x());
-                yCenters.push_back((size_t)ev.y());
+                xCenters.push_back((int)ev.x());
+                yCenters.push_back((int)ev.y());
             }
         }
-        size_t numEventsToMatch = xCenters.size();
+        int numEventsToMatch = xCenters.size();
 
         // initialize all the data for matching
         vector<cv::Scalar> leftVariances(numEventsToMatch);
         vector<double> correlation(numEventsToMatch);
         vector<int> matches(numEventsToMatch);
         vector<vector<cv::Scalar>> rightVariances(numEventsToMatch), covariances(numEventsToMatch);
-        for(size_t i = 0; i < numEventsToMatch; i++) {
+        for(int i = 0; i < numEventsToMatch; i++) {
             rightVariances[i].reserve(searchBound);
             covariances[i].reserve(searchBound);
         }
@@ -182,7 +189,7 @@ namespace SlamDemo {
 
     cv::Mat drawBlockMatchingResult(
         const cv::Size resolution,
-        const size_t searchBound,
+        const int searchBound,
         const StereoBlockMatchingResult sbmResult
     ){
 
@@ -190,14 +197,16 @@ namespace SlamDemo {
         // use hue to indicate disparity, value to indicate confidence
         cv::Mat visHSV = cv::Mat::zeros(resolution, CV_8UC3);
         cv::Mat visBGR;
-        for(size_t i = 0; i < sbmResult.x.size(); i++) {
-            size_t x = sbmResult.x[i];
-            size_t y = sbmResult.y[i];
-            uint8_t hue = sbmResult.match[i] > -1 ? (uint8_t)(179.*sbmResult.match[i]/searchBound) : 0;
-            uint8_t val = sbmResult.match[i] > -1 ? (uint8_t)(255.*sbmResult.correlation[i]*sbmResult.correlation[i]) : 0;
-            for(int i = x - 1; i < x + 2; i++) {
-                for(int j = y - 1; j < y + 2; j++) {
-                    visHSV.at<cv::Vec3b>(j, i) = cv::Vec3b(hue, 255, val);
+        for(int i = 0; i < sbmResult.x.size(); i++) {
+            if(sbmResult.match[i] > -1) {
+                int x = sbmResult.x[i];
+                int y = sbmResult.y[i];
+                uint8_t hue = (uint8_t)(179.*sbmResult.match[i]/searchBound);
+                uint8_t val = (uint8_t)(255.*sbmResult.correlation[i]*sbmResult.correlation[i]);
+                for(int i = x - 1; i < x + 2; i++) {
+                    for(int j = y - 1; j < y + 2; j++) {
+                        visHSV.at<cv::Vec3b>(j, i) = cv::Vec3b(hue, 255, val);
+                    }
                 }
             }
         }
@@ -210,8 +219,8 @@ namespace SlamDemo {
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
-        const size_t halfBlockSize,
-        const size_t searchBound,
+        const int halfBlockSize,
+        const int searchBound,
         queue<tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>>>& incomingLeftData,
         queue<vector<cv::Mat>>& incomingRightData,
         queue<vector<cv::Mat>>& outgoingImages
@@ -231,13 +240,14 @@ namespace SlamDemo {
                 vector<dv::Event> horizontalEvents = get<2>(leftImageDatum);
 
                 // combined positive and negative time surfaces into [-1, 1] double-valued array
-                cv::Mat combinedTSLeftU8 = posTSLeft + negTSLeft - 255;
-                cv::Mat combinedTSLeft;
-                combinedTSLeftU8.convertTo(combinedTSLeft, CV_64FC1);
+                cv::Mat negTSLeftf, posTSLeftf, negTSRightf, posTSRightf, combinedTSLeft, combinedTSRight;
+                negTSLeft.convertTo(negTSLeftf, CV_64FC1);
+                posTSLeft.convertTo(posTSLeftf, CV_64FC1);
+                combinedTSLeft = negTSLeftf + posTSLeftf - 255.;
                 combinedTSLeft /= 255.;
-                cv::Mat combinedTSRightU8 = posTSRight + negTSRight - 255;
-                cv::Mat combinedTSRight;
-                combinedTSRightU8.convertTo(combinedTSRight, CV_64FC1);
+                negTSRight.convertTo(negTSRightf, CV_64FC1);
+                negTSRight.convertTo(negTSRightf, CV_64FC1);
+                combinedTSRight = negTSRightf + posTSRightf - 255.;
                 combinedTSRight /= 255.;
 
                 StereoBlockMatchingResult verticalMatchResult = returnStereoBlockMatching(
@@ -246,8 +256,8 @@ namespace SlamDemo {
                     resolution,
                     halfBlockSize,
                     searchBound,
-                    combinedTSLeft,
-                    combinedTSRight,
+                    ref(combinedTSLeft),
+                    ref(combinedTSRight),
                     verticalEvents
                 );
                 StereoBlockMatchingResult horizontalMatchResult = returnStereoBlockMatching(
@@ -256,8 +266,8 @@ namespace SlamDemo {
                     resolution,
                     halfBlockSize,
                     searchBound,
-                    combinedTSLeft,
-                    combinedTSRight,
+                    ref(combinedTSLeft),
+                    ref(combinedTSRight),
                     verticalEvents
                 );
 

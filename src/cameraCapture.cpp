@@ -59,7 +59,6 @@ void rightCameraCapture(
 
         auto now = chrono::high_resolution_clock::now();
         if (now - lastQPush > sendIntervalMilliseconds * 1ms && eventBuffer.size() > 1) {
-            cout << "Right captured " << eventBuffer.size() << " events" << endl;
             outgoingEvents.push(eventBuffer);
             eventBuffer = dv::EventStore();
 
@@ -130,8 +129,6 @@ void leftCameraCapture(
 
         auto now = chrono::high_resolution_clock::now();
         if (now - lastQPush > sendIntervalMilliseconds * 1ms && imuBuffer.size() > 1 && eventBuffer.size() > 1) {
-            //cout << eventBuffer.size() << " right events" << endl;
-            cout << "Left captured " << eventBuffer.size() << " events" << endl;
             outgoingEvents.push(eventBuffer);
             eventBuffer = dv::EventStore();
             outgoingIMU.push(imuBuffer);

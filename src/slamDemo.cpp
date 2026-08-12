@@ -47,8 +47,8 @@ int main(int argc, char* argv[])
     int edgeFeatureDownsampling;
     double minBlockVariance;
     double minBlockCorrelation;
-    size_t sbmHalfBlockSize;
-    size_t sbmSearchBound;
+    int sbmHalfBlockSize;
+    int sbmSearchBound;
 
     po::options_description desc("Allowed options");
     desc.add_options()
@@ -60,11 +60,11 @@ int main(int argc, char* argv[])
         ("time-surface-ms", po::value<int>(&timeSurfaceMilliseconds)->default_value(30), "Decay constant of the time surfaces in milliseconds")
         ("aa-patches-x", po::value<int>(&aaSurfacePatchesX)->default_value(4), "How many grid patches for adaptive accumulation, x axis")
         ("aa-patches-y", po::value<int>(&aaSurfacePatchesY)->default_value(3), "How many grid patches for adaptive accumulation, y axis")
-        ("edge-feature-downsampling", po::value<int>(&edgeFeatureDownsampling)->default_value(10), "Minimum downsampling factor for converting (filtered) events into features for stereo matching"),
-        ("min-block-variance", po::value<double>(&minBlockVariance)->default_value(.1), "Minimum variance that a time surface patch must possess to be matched."),
-        ("min-block-correlaion", po::value<double>(&minBlockCorrelation)->default_value(.5), "Minimum correlation between two matched blocks in stereo block matching."),
-        ("sbm-search-bound", po::value<size_t>(&sbmHalfBlockSize)->default_value(12), "Block side length used in SBM minus 1 divided by two."),
-        ("sbm-search-bound", po::value<size_t>(&sbmSearchBound)->default_value(100), "Matching a block from the left camera will check at most this many blocks from the right camera.");
+        ("edge-feature-downsampling", po::value<int>(&edgeFeatureDownsampling)->default_value(10), "Minimum downsampling factor for converting (filtered) events into features for stereo matching")
+        ("min-block-variance", po::value<double>(&minBlockVariance)->default_value(.05), "Minimum variance that a time surface patch must possess to be matched.")
+        ("min-block-correlation", po::value<double>(&minBlockCorrelation)->default_value(.1), "Minimum correlation between two matched blocks in stereo block matching.")
+        ("sbm-half-blocksize", po::value<int>(&sbmHalfBlockSize)->default_value(12), "Block side length used in SBM minus 1 divided by two.")
+        ("sbm-search-bound", po::value<int>(&sbmSearchBound)->default_value(100), "Matching a block from the left camera will check at most this many blocks from the right camera.");
 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -81,7 +81,9 @@ int main(int argc, char* argv[])
     cout << "Downsampling rate for edge feature detection: " << edgeFeatureDownsampling << endl;
     cout << "Minimum block variance for SBM: " << minBlockVariance << endl;
     cout << "Minimum block correlation for SBM: " << minBlockCorrelation << endl;
+    cout << "SBM half block size: " << sbmHalfBlockSize << endl;
     cout << "SBM search bound: " << sbmSearchBound << endl;
+
     auto calibration = dv::camera::CalibrationSet::LoadFromFile(calibJSONPath);
 
     // It is expected that calibration file will have "C0" as the leftEventBuffer camera
