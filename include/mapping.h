@@ -51,10 +51,30 @@ namespace SlamDemo {
         vector<vector<cv::Scalar>>& rightVariances,
         vector<vector<cv::Scalar>>& covariances,
         vector<int>& matches,
+        vector<double>& correlations,
+        int start, int end
+    );
+
+    void stereoBlockMatchingParallel(
+        const int numThreads,
+        const double minVariance,
+        const double minCorrelation,
+        const cv::Size resolution,
+        const int halfBlockSize,
+        const int searchBound,
+        const cv::Mat& combinedTSLeft,
+        const cv::Mat& combinedTSRight,
+        const vector<int>& xCenters,
+        const vector<int>& yCenters,
+        vector<cv::Scalar>& leftVariances,
+        vector<vector<cv::Scalar>>& rightVariances,
+        vector<vector<cv::Scalar>>& covariances,
+        vector<int>& matches,
         vector<double>& correlations
     );
 
     StereoBlockMatchingResult returnStereoBlockMatching(
+        const int numThreads,
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
@@ -72,6 +92,7 @@ namespace SlamDemo {
     );
 
     void depthEstimationLoop(
+        int numThreads,
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,

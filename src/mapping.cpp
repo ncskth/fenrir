@@ -22,11 +22,10 @@ namespace SlamDemo {
         int leftX = centerX - halfBlockSize;
         int topY = centerY - halfBlockSize;
         cv::Rect leftRect(leftX, topY, blockSize, blockSize);
-        cout << "Left rectangle: " << leftRect << endl;
+        //cout << "Left rectangle: " << leftRect << endl;
 
         cv::Mat leftPatch = combinedTSLeft(leftRect);
-        cv::Scalar leftMean;
-        cv::mean(leftPatch, leftMean);
+        cv::Scalar leftMean = cv::mean(leftPatch);
         cv::Mat znPatch = leftPatch - leftMean;
         leftVarianceAtBlock = cv::sum(znPatch.mul(znPatch))/((double)blockArea);
 
@@ -36,13 +35,12 @@ namespace SlamDemo {
         cv::Mat rightPatch = combinedTSRight(rightRect);
         cv::Scalar sumIntensity = cv::sum(rightPatch);
         cv::Scalar sumSquaredIntensity = cv::sum(rightPatch.mul(rightPatch));
-        cv::Scalar variance = ((double)blockArea*sumSquaredIntensity - sumIntensity*sumIntensity)/((double)blockArea*blockArea*blockArea);
+        cv::Scalar variance = (sumSquaredIntensity - sumIntensity*sumIntensity)/((double)blockArea);
         rightVarianceAtDisparity.push_back(variance);
         cv::Scalar covariance = (cv::sum(leftPatch.mul(rightPatch)) - leftMean*sumIntensity)/((double)blockArea);
         covarianceAtDisparity.push_back(covariance);
         cv::Mat lastPatch = rightPatch;
 
-        cout << "Covariance vector length before search: " << covarianceAtDisparity.size() << endl;
         for(int disparity = 1; disparity < numSearches; disparity++) {
             rightRect = cv::Rect(leftX - disparity, topY, blockSize, blockSize);
             rightPatch = combinedTSRight(rightRect);
@@ -55,12 +53,11 @@ namespace SlamDemo {
 
             lastPatch = rightPatch;
 
-            variance = ((double)blockArea*sumSquaredIntensity - sumIntensity*sumIntensity)/((double)blockArea*blockArea*blockArea);
+            variance = (sumSquaredIntensity - sumIntensity*sumIntensity)/((double)blockArea);
             rightVarianceAtDisparity.push_back(variance);
             covariance = (cv::sum(leftPatch.mul(rightPatch)) - leftMean*sumIntensity)/((double)blockArea);
             covarianceAtDisparity.push_back(covariance);
         }
-        cout << "Covariance vector length after search: " << covarianceAtDisparity.size() << endl;
     }
 
     void singleBlockSearch(
@@ -76,20 +73,16 @@ namespace SlamDemo {
         match = -1;
         bestCorrelation = 0.;
         if(leftVarianceAtBlock[0] < minVariance) {
-            cout << "Left patch did not pass disparity check!" << endl;
             return;
         }
 
         for(int disparity = 0; disparity < covarianceAtDisparity.size(); disparity++) {
             if(rightVarianceAtDisparity[disparity][0] > minVariance) {
                 double corr = covarianceAtDisparity[disparity][0]/(sqrt(leftVarianceAtBlock[0]*rightVarianceAtDisparity[disparity][0]));
-                cout << "Correlation: " << corr << endl;
                 if(corr > minCorrelation && corr > bestCorrelation) {
-                    match = (int)disparity;
+                    match = disparity;
                     corr = bestCorrelation;
                 }
-            } else {
-                cout << "Right patch did not pass disparity check!" << endl;
             }
         }
     }
@@ -108,11 +101,10 @@ namespace SlamDemo {
         vector<vector<cv::Scalar>>& rightVariances,
         vector<vector<cv::Scalar>>& covariances,
         vector<int>& matches,
-        vector<double>& correlations
+        vector<double>& correlations,
+        int start, int end
     ) {
-        int numBlocks = xCenters.size();
-
-        for(int i = 0; i < numBlocks; i++) {
+        for(int i = start; i < end; i++) {
             singleBlockCrossCorrelation(
                 resolution,
                 halfBlockSize,
@@ -137,7 +129,55 @@ namespace SlamDemo {
         }
     }
 
+    void stereoBlockMatchingParallel(
+        const int numThreads,
+        const double minVariance,
+        const double minCorrelation,
+        const cv::Size resolution,
+        const int halfBlockSize,
+        const int searchBound,
+        const cv::Mat& combinedTSLeft,
+        const cv::Mat& combinedTSRight,
+        const vector<int>& xCenters,
+        const vector<int>& yCenters,
+        vector<cv::Scalar>& leftVariances,
+        vector<vector<cv::Scalar>>& rightVariances,
+        vector<vector<cv::Scalar>>& covariances,
+        vector<int>& matches,
+        vector<double>& correlations
+    ) {
+        int numBlocks = xCenters.size();
+        int blocksPerThread = numBlocks/numThreads + 1;
+        vector<thread> threads(numThreads);
+        for(size_t i = 0; i < numThreads; i++) {
+            threads[i] = thread([&] {
+                stereoBlockMatchingSequential(
+                    minVariance,
+                    minCorrelation,
+                    resolution,
+                    halfBlockSize,
+                    searchBound,
+                    combinedTSLeft,
+                    combinedTSRight,
+                    xCenters,
+                    yCenters,
+                    leftVariances,
+                    rightVariances,
+                    covariances,
+                    matches,
+                    correlations,
+                    blocksPerThread*i,
+                    min(numBlocks, static_cast<int>(blocksPerThread * (i + 1)))
+                );
+            });
+        }
+        for(size_t i = 0; i < numThreads; i++) {
+            threads[i].join();
+        }
+    }
+
     StereoBlockMatchingResult returnStereoBlockMatching(
+        const int numThreads,
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
@@ -168,6 +208,7 @@ namespace SlamDemo {
         }
 
         stereoBlockMatchingSequential(
+            //numThreads,
             minVariance,
             minCorrelation,
             resolution,
@@ -181,7 +222,8 @@ namespace SlamDemo {
             ref(rightVariances),
             ref(covariances),
             ref(matches),
-            ref(correlation)
+            ref(correlation),
+            0, (int)(xCenters.size())
         );
 
         return {xCenters, yCenters, matches, correlation};
@@ -201,8 +243,8 @@ namespace SlamDemo {
             if(sbmResult.match[i] > -1) {
                 int x = sbmResult.x[i];
                 int y = sbmResult.y[i];
-                uint8_t hue = (uint8_t)(179.*sbmResult.match[i]/searchBound);
-                uint8_t val = (uint8_t)(255.*sbmResult.correlation[i]*sbmResult.correlation[i]);
+                uint8_t hue = (uint8_t)(120.*sbmResult.match[i]/searchBound);
+                uint8_t val = 255;//(uint8_t)(255.*sbmResult.correlation[i]);
                 for(int i = x - 1; i < x + 2; i++) {
                     for(int j = y - 1; j < y + 2; j++) {
                         visHSV.at<cv::Vec3b>(j, i) = cv::Vec3b(hue, 255, val);
@@ -216,6 +258,7 @@ namespace SlamDemo {
     }
 
     void depthEstimationLoop(
+        const int numThreads,
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
@@ -232,25 +275,24 @@ namespace SlamDemo {
                 auto rightImageDatum = incomingRightData.front();
                 incomingRightData.pop();
 
-                cv::Mat negTSLeft = get<0>(leftImageDatum)[0];
-                cv::Mat posTSLeft = get<0>(leftImageDatum)[1];
-                cv::Mat negTSRight = rightImageDatum[0];
-                cv::Mat posTSRight = rightImageDatum[1];
+                cv::Mat posTSLeft = get<0>(leftImageDatum)[0];
+                cv::Mat negTSLeft = get<0>(leftImageDatum)[1];
+                cv::Mat posTSRight = rightImageDatum[0];
+                cv::Mat negTSRight = rightImageDatum[1];
                 vector<dv::Event> verticalEvents = get<1>(leftImageDatum);
                 vector<dv::Event> horizontalEvents = get<2>(leftImageDatum);
 
-                // combined positive and negative time surfaces into [-1, 1] double-valued array
-                cv::Mat negTSLeftf, posTSLeftf, negTSRightf, posTSRightf, combinedTSLeft, combinedTSRight;
+                // combine positive and negative time surfaces into [-1, 1] double-valued array
+                cv::Mat negTSLeftf, posTSLeftf, negTSRightf, posTSRightf;
                 negTSLeft.convertTo(negTSLeftf, CV_64FC1);
                 posTSLeft.convertTo(posTSLeftf, CV_64FC1);
-                combinedTSLeft = negTSLeftf + posTSLeftf - 255.;
-                combinedTSLeft /= 255.;
+                cv::Mat combinedTSLeft = (negTSLeftf + posTSLeftf - 255.)/255.;
                 negTSRight.convertTo(negTSRightf, CV_64FC1);
-                negTSRight.convertTo(negTSRightf, CV_64FC1);
-                combinedTSRight = negTSRightf + posTSRightf - 255.;
-                combinedTSRight /= 255.;
+                posTSRight.convertTo(posTSRightf, CV_64FC1);
+                cv::Mat combinedTSRight = (negTSRightf + posTSRightf - 255.)/255.;
 
                 StereoBlockMatchingResult verticalMatchResult = returnStereoBlockMatching(
+                    numThreads,
                     minVariance,
                     minCorrelation,
                     resolution,
@@ -261,6 +303,7 @@ namespace SlamDemo {
                     verticalEvents
                 );
                 StereoBlockMatchingResult horizontalMatchResult = returnStereoBlockMatching(
+                    numThreads,
                     minVariance,
                     minCorrelation,
                     resolution,

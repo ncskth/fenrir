@@ -48,6 +48,7 @@ int main(int argc, char* argv[])
     double minBlockVariance;
     double minBlockCorrelation;
     int sbmHalfBlockSize;
+    int sbmNumThreads;
     int sbmSearchBound;
 
     po::options_description desc("Allowed options");
@@ -64,6 +65,7 @@ int main(int argc, char* argv[])
         ("min-block-variance", po::value<double>(&minBlockVariance)->default_value(.05), "Minimum variance that a time surface patch must possess to be matched.")
         ("min-block-correlation", po::value<double>(&minBlockCorrelation)->default_value(.1), "Minimum correlation between two matched blocks in stereo block matching.")
         ("sbm-half-blocksize", po::value<int>(&sbmHalfBlockSize)->default_value(12), "Block side length used in SBM minus 1 divided by two.")
+        ("sbm-num-threads", po::value<int>(&sbmNumThreads)->default_value(1), "Number of threads used for SBM.")
         ("sbm-search-bound", po::value<int>(&sbmSearchBound)->default_value(100), "Matching a block from the left camera will check at most this many blocks from the right camera.");
 
     po::variables_map vm;
@@ -82,6 +84,7 @@ int main(int argc, char* argv[])
     cout << "Minimum block variance for SBM: " << minBlockVariance << endl;
     cout << "Minimum block correlation for SBM: " << minBlockCorrelation << endl;
     cout << "SBM half block size: " << sbmHalfBlockSize << endl;
+    cout << "SBM number of threads: " << sbmNumThreads << endl;
     cout << "SBM search bound: " << sbmSearchBound << endl;
 
     auto calibration = dv::camera::CalibrationSet::LoadFromFile(calibJSONPath);
@@ -168,6 +171,7 @@ int main(int argc, char* argv[])
 
     thread depthEstimationThread(
         &depthEstimationLoop,
+        sbmNumThreads,
         minBlockVariance,
         minBlockCorrelation,
         resolution,
