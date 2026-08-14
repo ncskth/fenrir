@@ -3,18 +3,19 @@
 
 #include <queue>
 #include <iostream>
+#include <future>
 
 namespace SlamDemo {
     using namespace std;
 
-    struct StereoBlockMatchingResult {
-        vector<int> x;
-        vector<int> y;
-        vector<int> match;
-        vector<double> correlation;
+    struct StereoBlockMatch {
+        int x;
+        int y;
+        int pixelDisparity;
+        double correlation;
     };
 
-    void singleBlockCrossCorrelation(
+    StereoBlockMatch matchSingleBlock(
         const cv::Size resolution,
         const int halfBlockSize,
         const int searchBound,
@@ -37,7 +38,7 @@ namespace SlamDemo {
         double& bestCorrelation
     );
 
-    void stereoBlockMatchingSequential(
+    vector<StereoBlockMatch> stereoBlockMatchingSequential(
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
@@ -47,15 +48,11 @@ namespace SlamDemo {
         const cv::Mat& combinedTSRight,
         const vector<int>& xCenters,
         const vector<int>& yCenters,
-        vector<cv::Scalar>& leftVariances,
-        vector<vector<cv::Scalar>>& rightVariances,
-        vector<vector<cv::Scalar>>& covariances,
-        vector<int>& matches,
-        vector<double>& correlations,
-        int start, int end
+        const int start,
+        const int end
     );
 
-    void stereoBlockMatchingParallel(
+    vector<StereoBlockMatch> stereoBlockMatchingParallel(
         const int numThreads,
         const double minVariance,
         const double minCorrelation,
@@ -73,33 +70,25 @@ namespace SlamDemo {
         vector<double>& correlations
     );
 
-    StereoBlockMatchingResult returnStereoBlockMatching(
+    cv::Mat drawBlockMatchingResult(
+        const cv::Size resolution,
+        const int searchBound,
+        const vector<StereoBlockMatch>& sbmResult
+    );
+
+    tuple<double, double> sobelAtPoint(cv::Mat img, int y, int x);
+
+    void depthEstimationLoop(
         const int numThreads,
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
         const int halfBlockSize,
+        const int maxNumBlocks,
         const int searchBound,
-        const cv::Mat& combinedTSLeft,
-        const cv::Mat& combinedTSRight,
-        const vector<dv::Event> eventsToMatch
-    );
-
-    cv::Mat drawBlockMatchingResult(
-        const cv::Size resolution,
-        const int searchBound,
-        const StereoBlockMatchingResult sbmResult
-    );
-
-    void depthEstimationLoop(
-        int numThreads,
-        const double minVariance,
-        const double minCorrelation,
-        const cv::Size resolution,
-        const int halfBlockSize,
-        const int searchBound,
-        queue<tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>>>& incomingLeftData,
-        queue<vector<cv::Mat>>& incomingRightData,
+        queue<dv::EventStore>& incomingLeftEvents,
+        queue<cv::Mat>& incomingLeftImages,
+        queue<cv::Mat>& incomingRightImages,
         queue<vector<cv::Mat>>& outgoingImages
     );
 }

@@ -16,9 +16,7 @@ namespace SlamDemo {
         const dv::EventStore events
     );
 
-    tuple<double, double> sobelAtPoint(cv::Mat img, int y, int x);
-
-    tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>> leftImageRepresentation(
+    cv::Mat leftImageRepresentation(
         const cv::Size resolution,
         const int aaPatchesX,
         const int aaPatchesY,
@@ -31,7 +29,7 @@ namespace SlamDemo {
         dv::EventStore &events
     );
 
-    vector<cv::Mat> rightImageRepresentation(
+    cv::Mat imageRepresentation(
         const cv::Size resolution,
         const cv::Matx33f cameraMatrix,
         const vector<float> distortionCoefficients,
@@ -50,17 +48,17 @@ namespace SlamDemo {
         const cv::Matx33f &cameraMatrix,
         const vector<float> &distortionCoefficients,
         queue<dv::EventStore> &incomingEvents,
-        queue<tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>>> &outgoingImages1,
-        queue<tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>>> &outgoingImages2
+        queue<cv::Mat> &outgoingImages1,
+        queue<cv::Mat> &outgoingImages2
     );
 
-    void rightImageRepresentationLoop(
+    void imageRepresentationLoop(
         const cv::Size resolution,
         const int timeSurfaceMilliseconds,
         const cv::Matx33f &cameraMatrix,
         const vector<float> &distortionCoefficients,
         queue<dv::EventStore> &incomingEvents,
-        queue<vector<cv::Mat>> &outgoingImages1,
-        queue<vector<cv::Mat>> &outgoingImages2
+        queue<cv::Mat> &outgoingImages1,
+        queue<cv::Mat> &outgoingImages2
     );
 }

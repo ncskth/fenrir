@@ -44,9 +44,9 @@ int main(int argc, char* argv[])
     int timeSurfaceMilliseconds;
     int aaSurfacePatchesX;
     int aaSurfacePatchesY;
-    int edgeFeatureDownsampling;
     double minBlockVariance;
     double minBlockCorrelation;
+    int sbmMaxBlocks;
     int sbmHalfBlockSize;
     int sbmNumThreads;
     int sbmSearchBound;
@@ -61,9 +61,9 @@ int main(int argc, char* argv[])
         ("time-surface-ms", po::value<int>(&timeSurfaceMilliseconds)->default_value(30), "Decay constant of the time surfaces in milliseconds")
         ("aa-patches-x", po::value<int>(&aaSurfacePatchesX)->default_value(4), "How many grid patches for adaptive accumulation, x axis")
         ("aa-patches-y", po::value<int>(&aaSurfacePatchesY)->default_value(3), "How many grid patches for adaptive accumulation, y axis")
-        ("edge-feature-downsampling", po::value<int>(&edgeFeatureDownsampling)->default_value(10), "Minimum downsampling factor for converting (filtered) events into features for stereo matching")
         ("min-block-variance", po::value<double>(&minBlockVariance)->default_value(.05), "Minimum variance that a time surface patch must possess to be matched.")
         ("min-block-correlation", po::value<double>(&minBlockCorrelation)->default_value(.1), "Minimum correlation between two matched blocks in stereo block matching.")
+        ("sbm-max-blocks", po::value<int>(&sbmMaxBlocks)->default_value(1000), "Maximum number of events used for stereo block matching")
         ("sbm-half-blocksize", po::value<int>(&sbmHalfBlockSize)->default_value(12), "Block side length used in SBM minus 1 divided by two.")
         ("sbm-num-threads", po::value<int>(&sbmNumThreads)->default_value(1), "Number of threads used for SBM.")
         ("sbm-search-bound", po::value<int>(&sbmSearchBound)->default_value(100), "Matching a block from the left camera will check at most this many blocks from the right camera.");
@@ -80,22 +80,22 @@ int main(int argc, char* argv[])
     cout << "Time surface decay time constant: " << timeSurfaceMilliseconds << "ms" << endl;
     cout << "Adaptive accumulation patches X: " << aaSurfacePatchesX << endl;
     cout << "Adaptive accumulation patches Y: " << aaSurfacePatchesY << endl;
-    cout << "Downsampling rate for edge feature detection: " << edgeFeatureDownsampling << endl;
-    cout << "Minimum block variance for SBM: " << minBlockVariance << endl;
-    cout << "Minimum block correlation for SBM: " << minBlockCorrelation << endl;
+    cout << "SBM minimum block variance: " << minBlockVariance << endl;
+    cout << "SBM minimum block correlation: " << minBlockCorrelation << endl;
+    cout << "SBM max number of blocks: " << sbmMaxBlocks << endl;
     cout << "SBM half block size: " << sbmHalfBlockSize << endl;
     cout << "SBM number of threads: " << sbmNumThreads << endl;
     cout << "SBM search bound: " << sbmSearchBound << endl;
 
     auto calibration = dv::camera::CalibrationSet::LoadFromFile(calibJSONPath);
 
-    // It is expected that calibration file will have "C0" as the leftEventBuffer camera
+    // It is expected that calibration file will have "C0" as the leftCameraBuffer camera
     auto leftCameraCalib = calibration.getCameraCalibration("C0").value();
     const cv::Size resolution = leftCameraCalib.resolution;
     cv::Matx33f camMatL = leftCameraCalib.getCameraMatrix();
     vector<float> distCoeffsL = leftCameraCalib.distortion;
 
-    // The second camera is assumed to be rightEventBuffer-side camera
+    // The second camera is assumed to be rightCameraBuffer-side camera
     auto rightCameraCalib = calibration.getCameraCalibration("C1").value();
     cv::Matx33f camMatR = rightCameraCalib.getCameraMatrix();
     vector<float> distCoeffsR = rightCameraCalib.distortion;
@@ -110,64 +110,72 @@ int main(int argc, char* argv[])
     cv::namedWindow("Trajectory", cv::WINDOW_NORMAL);
     cv::namedWindow("Depth", cv::WINDOW_NORMAL);
 
-    queue<dv::EventStore> leftEventQueue;
-    queue<dv::EventStore> rightEventQueue;
+    queue<dv::EventStore> leftCameraToImage;
+    queue<dv::EventStore> leftCameraToMap;
+    queue<dv::EventStore> rightCameraToImage;
     queue<vector<dv::IMU>> imuQueue;
     queue<cv::Mat> velocityVisQueue;
-    //vector<cv::Affine3d> poseTrajectory;
-    queue<tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>>> leftImageToRender;
-    queue<vector<cv::Mat>> rightImageToRender;
-    queue<tuple<vector<cv::Mat>, vector<dv::Event>, vector<dv::Event>>> leftImageToMapping;
-    queue<vector<cv::Mat>> rightImageToMapping;
+    queue<cv::Mat> leftImageToRender;
+    queue<cv::Mat> rightImageToRender;
+    queue<cv::Mat> leftImageToMap;
+    queue<cv::Mat> rightImageToMap;
     queue<vector<cv::Mat>> depthImageQueue;
 
     cv::Mat trajectoryVisualization = cv::Mat::zeros(400, 400, CV_8UC1);
 
-    thread leftCameraCaptureThread(&leftCameraCapture,
-                                   resolution,
-                                   leftCameraCalib.name,
-                                   hotPixelsDir + "/hot_pixels_left_x.npy",
-                                   hotPixelsDir + "/hot_pixels_left_y.npy",
-                                   highPassMicroseconds,
-                                   lowPassHz,
-                                   readCameraMilliseconds,
-                                   ref(leftEventQueue),
-                                   ref(imuQueue));
-    thread rightCameraCaptureThread(&rightCameraCapture,
-                                    resolution,
-                                    rightCameraCalib.name,
-                                    hotPixelsDir + "/hot_pixels_right_x.npy",
-                                    hotPixelsDir + "/hot_pixels_right_y.npy",
-                                    highPassMicroseconds,
-                                    lowPassHz,
-                                    readCameraMilliseconds,
-                                    ref(rightEventQueue));
+    thread leftCameraCaptureThread(
+        &leftCameraCapture,
+        resolution,
+        leftCameraCalib.name,
+        hotPixelsDir + "/hot_pixels_left_x.npy",
+        hotPixelsDir + "/hot_pixels_left_y.npy",
+        highPassMicroseconds,
+        lowPassHz,
+        readCameraMilliseconds,
+        ref(leftCameraToImage),
+        ref(leftCameraToMap),
+        ref(imuQueue)
+    );
+    thread rightCameraCaptureThread(
+        &rightCameraCapture,
+        resolution,
+        rightCameraCalib.name,
+        hotPixelsDir + "/hot_pixels_right_x.npy",
+        hotPixelsDir + "/hot_pixels_right_y.npy",
+        highPassMicroseconds,
+        lowPassHz,
+        readCameraMilliseconds,
+        ref(rightCameraToImage)
+    );
 
-    thread trackingThread(&imuPreintegration,
-                          gyroBias,
-                          accelBias,
-                          ref(imuQueue),
-                          ref(velocityVisQueue));
+    //thread trackingThread(
+    //    &imuPreintegration,
+    //    gyroBias,
+    //    accelBias,
+    //    ref(imuQueue),
+    //    ref(velocityVisQueue)
+    //);
 
-    thread leftImageRepresentationThread(&leftImageRepresentationLoop,
-                                         resolution,
-                                         aaSurfacePatchesX,
-                                         aaSurfacePatchesY,
-                                         edgeFeatureDownsampling,
-                                         timeSurfaceMilliseconds,
-                                         camMatL,
-                                         distCoeffsL,
-                                         ref(leftEventQueue),
-                                         ref(leftImageToRender),
-                                         ref(leftImageToMapping));
-    thread rightImageRepresentationThread(&rightImageRepresentationLoop,
-                                          resolution,
-                                          timeSurfaceMilliseconds,
-                                          camMatR,
-                                          distCoeffsR,
-                                          ref(rightEventQueue),
-                                          ref(rightImageToRender),
-                                          ref(rightImageToMapping));
+    thread leftImageRepresentationThread(
+        &imageRepresentationLoop,
+        resolution,
+        timeSurfaceMilliseconds,
+        camMatL,
+        distCoeffsL,
+        ref(leftCameraToImage),
+        ref(leftImageToRender),
+        ref(leftImageToMap)
+    );
+    thread rightImageRepresentationThread(
+        &imageRepresentationLoop,
+        resolution,
+        timeSurfaceMilliseconds,
+        camMatR,
+        distCoeffsR,
+        ref(rightCameraToImage),
+        ref(rightImageToRender),
+        ref(rightImageToMap)
+    );
 
     thread depthEstimationThread(
         &depthEstimationLoop,
@@ -176,15 +184,22 @@ int main(int argc, char* argv[])
         minBlockCorrelation,
         resolution,
         sbmHalfBlockSize,
+        sbmMaxBlocks,
         sbmSearchBound,
-        ref(leftImageToMapping),
-        ref(rightImageToMapping),
+        ref(leftCameraToMap),
+        ref(leftImageToMap),
+        ref(rightImageToMap),
         ref(depthImageQueue)
     );
 
     // Run the processing loop while both cameras are connected
     while (true) {
         if (!leftImageToRender.empty() && !rightImageToRender.empty()) {
+            cv::Mat leftImage = leftImageToRender.front();
+            leftImageToRender.pop();
+            cv::Mat rightImage = rightImageToRender.front();
+            rightImageToRender.pop();
+            /*
             cv::Mat rightImage;
             cv::vconcat(rightImageToRender.front()[0], rightImageToRender.front()[1], rightImage);
             rightImageToRender.pop();
@@ -194,14 +209,18 @@ int main(int argc, char* argv[])
             cv::Mat leftImage;
             cv::vconcat(get<0>(leftqFront)[0], get<0>(leftqFront)[1], leftImage);
             cv::vconcat(leftImage, get<0>(leftqFront)[2], leftImage);
+            */
 
             cv::imshow("Left", leftImage);
             cv::imshow("Right", rightImage);
         }
-        if (!velocityVisQueue.empty()) {
-            cv::Mat trajectoryVisualization = velocityVisQueue.front();
-            velocityVisQueue.pop();
-            cv::imshow("Trajectory", trajectoryVisualization);
+        //if (!velocityVisQueue.empty()) {
+        //    cv::Mat trajectoryVisualization = velocityVisQueue.front();
+        //    velocityVisQueue.pop();
+        //    cv::imshow("Trajectory", trajectoryVisualization);
+        //}
+        if (!imuQueue.empty()) {
+            imuQueue.pop();
         }
         if(!depthImageQueue.empty()) {
             auto depthImages = depthImageQueue.front();

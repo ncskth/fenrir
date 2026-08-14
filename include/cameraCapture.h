@@ -37,7 +37,8 @@ namespace SlamDemo {
         const int highPassMicroseconds,
         const double lowPassHz,
         const int sendIntervalMilliseconds,
-        queue<dv::EventStore>& outgoingEvents,
+        queue<dv::EventStore>& outgoingEvents1,
+        queue<dv::EventStore>& outgoingEvents2,
         queue<vector<dv::IMU>>& outgoingIMU
     );
 }
