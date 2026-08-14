@@ -12,8 +12,8 @@ namespace SlamDemo {
         const string serial,
         const string hotPixelXFile,
         const string hotPixelYFile,
-        const int highPassMicroseconds,
-        const double lowPassHz,
+        const int accumulatorTimeConstant,
+        const double accumulatorGain,
         const int sendIntervalMilliseconds,
         queue<cv::Mat>& outgoingImages1,
         queue<cv::Mat>& outgoingImages2
@@ -27,8 +27,8 @@ namespace SlamDemo {
             throw dv::exceptions::RuntimeError("Input camera does not provide an event stream.");
         }
 
-        dv::noise::BackgroundActivityNoiseFilter highPass(resolution, highPassMicroseconds*1us);
-        dv::noise::LowPassFilter lowPass(resolution, lowPassHz);
+        //dv::noise::BackgroundActivityNoiseFilter highPass(resolution, highPassMicroseconds*1us);
+        //dv::noise::LowPassFilter lowPass(resolution, lowPassHz);
 
         auto hotPixelsX = cnpy::npy_load(hotPixelXFile);
         auto hotPixelsY = cnpy::npy_load(hotPixelYFile);
@@ -49,9 +49,9 @@ namespace SlamDemo {
         accumulator.setMinPotential(0.f);
         accumulator.setMaxPotential(1.f);
         accumulator.setNeutralPotential(0.5f);
-        accumulator.setEventContribution(0.15f);
+        accumulator.setEventContribution(accumulatorGain);
         accumulator.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
-        accumulator.setDecayParam(1e+6);
+        accumulator.setDecayParam(1e3*accumulatorTimeConstant);
         accumulator.setIgnorePolarity(false);
         accumulator.setSynchronousDecay(false);
 
@@ -76,9 +76,11 @@ namespace SlamDemo {
             if (now - lastQPush > sendIntervalMilliseconds * 1ms) {
                 dv::Frame frame = accumulator.generateFrame();
                 cv::Mat image = frame.image;
-                outgoingImages1.push(image);
+                cv::Mat blurred;
+                cv::blur(image, blurred, cv::Size(5, 5));
+                outgoingImages1.push(blurred);
                 cv::Mat frameToDepth;
-                image.convertTo(frameToDepth, CV_64F);
+                blurred.convertTo(frameToDepth, CV_64F);
                 outgoingImages2.push(frameToDepth);
 
                 sync_point.arrive_and_wait();
@@ -92,8 +94,8 @@ namespace SlamDemo {
         const string serial,
         const string hotPixelXFile,
         const string hotPixelYFile,
-        const int highPassMicroseconds,
-        const double lowPassHz,
+        const int accumulatorTimeConstant,
+        const double accumulatorGain,
         const int sendIntervalMilliseconds,
         queue<dv::EventStore>& outgoingEvents,
         queue<cv::Mat>& outgoingImages1,
@@ -112,8 +114,8 @@ namespace SlamDemo {
             throw dv::exceptions::RuntimeError("Input camera does not provide an IMU stream.");
         }
 
-        dv::noise::BackgroundActivityNoiseFilter highPass(resolution, highPassMicroseconds*1us);
-        dv::noise::LowPassFilter lowPass(resolution, lowPassHz);
+        //dv::noise::BackgroundActivityNoiseFilter highPass(resolution, highPassMicroseconds*1us);
+        //dv::noise::LowPassFilter lowPass(resolution, lowPassHz);
 
         auto hotPixelsX = cnpy::npy_load(hotPixelXFile);
         auto hotPixelsY = cnpy::npy_load(hotPixelYFile);
@@ -135,9 +137,9 @@ namespace SlamDemo {
         accumulator.setMinPotential(0.f);
         accumulator.setMaxPotential(1.f);
         accumulator.setNeutralPotential(0.5f);
-        accumulator.setEventContribution(0.15f);
+        accumulator.setEventContribution(accumulatorGain);
         accumulator.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
-        accumulator.setDecayParam(1e+6);
+        accumulator.setDecayParam(1e3*accumulatorTimeConstant);
         accumulator.setIgnorePolarity(false);
         accumulator.setSynchronousDecay(false);
 
@@ -169,9 +171,11 @@ namespace SlamDemo {
 
                 dv::Frame frame = accumulator.generateFrame();
                 cv::Mat image = frame.image;
-                outgoingImages1.push(image);
+                cv::Mat blurred;
+                cv::blur(image, blurred, cv::Size(5, 5));
+                outgoingImages1.push(blurred);
                 cv::Mat frameToDepth;
-                image.convertTo(frameToDepth, CV_64F);
+                blurred.convertTo(frameToDepth, CV_64F);
                 outgoingImages2.push(frameToDepth);
 
                 outgoingIMU.push(imuBuffer);

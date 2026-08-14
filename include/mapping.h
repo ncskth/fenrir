@@ -76,8 +76,6 @@ namespace SlamDemo {
         const vector<StereoBlockMatch>& sbmResult
     );
 
-    tuple<double, double> sobelAtPoint(cv::Mat img, int y, int x);
-
     void depthEstimationLoop(
         const int numThreads,
         const double minVariance,

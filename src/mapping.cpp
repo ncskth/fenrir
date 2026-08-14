@@ -5,6 +5,13 @@ namespace SlamDemo {
     using namespace std::chrono_literals;
     using namespace std;
 
+    bool isHorizontalEdge(const cv::Mat& img, const int y, const int x)
+    {
+        double dx = (img.at<double>(x + 1, y) + 0.5 * (img.at<double>(x + 1, y + 1) + img.at<double>(x + 1, y + 1))) - (img.at<double>(x - 1, y) + 0.5 * (img.at<double>(x - 1, y + 1) + img.at<double>(x - 1, y + 1)));
+        double dy = (img.at<double>(x, y + 1) + 0.5 * (img.at<double>(x + 1, y + 1) + img.at<double>(x - 1, y + 1))) - (img.at<double>(x, y - 1) + 0.5 * (img.at<double>(x + 1, y - 1) + img.at<double>(x - 1, y - 1)));
+        return abs(dx) < 0.5*abs(dy);
+    }
+
     StereoBlockMatch matchSingleBlock(
         const double minVariance,
         const double minCorrelation,
@@ -25,6 +32,11 @@ namespace SlamDemo {
         if (leftX < 0 || topY < 0 ||
             leftX + blockSize > combinedTSLeft.cols ||
             topY + blockSize > combinedTSLeft.rows) {
+            return {centerX, centerY, -1, 0.};
+        }
+
+        // If the local neighborhood is a horizontal edge, stereo block matching will be unreliable
+        if (isHorizontalEdge(combinedTSLeft, centerX, centerY)) {
             return {centerX, centerY, -1, 0.};
         }
 
@@ -287,13 +299,6 @@ namespace SlamDemo {
         return visBGR;
     }
 
-    tuple<double, double> sobelAtPoint(cv::Mat img, int y, int x)
-    {
-        double dx = (img.at<double>(x + 1, y) + 0.5 * (img.at<double>(x + 1, y + 1) + img.at<double>(x + 1, y + 1))) - (img.at<double>(x - 1, y) + 0.5 * (img.at<double>(x - 1, y + 1) + img.at<double>(x - 1, y + 1)));
-        double dy = (img.at<double>(x, y + 1) + 0.5 * (img.at<double>(x + 1, y + 1) + img.at<double>(x - 1, y + 1))) - (img.at<double>(x, y - 1) + 0.5 * (img.at<double>(x + 1, y - 1) + img.at<double>(x - 1, y - 1)));
-        return {dx, dy};
-    }
-
     void depthEstimationLoop(
         const int numThreads,
         const double minVariance,
@@ -317,8 +322,8 @@ namespace SlamDemo {
                 incomingRightImages.pop();
 
                 vector<int> xCenters, yCenters;
-                xCenters.reserve(downsampling);
-                yCenters.reserve(downsampling);
+                xCenters.reserve(events.size()/downsampling);
+                yCenters.reserve(events.size()/downsampling);
                 for(int i = 0; i < events.size(); i += downsampling) {
                     auto ev = events[i];
                     xCenters.push_back(ev.x());

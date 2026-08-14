@@ -41,7 +41,8 @@ int main(int argc, char* argv[])
     int highPassMicroseconds;
     double lowPassHz;
     int readCameraMilliseconds;
-    int timeSurfaceMilliseconds;
+    int eventAccumulatorMilliseconds;
+    double eventAccumulatorGain;
     int aaSurfacePatchesX;
     int aaSurfacePatchesY;
     double minBlockVariance;
@@ -58,12 +59,13 @@ int main(int argc, char* argv[])
         ("high-pass-us", po::value<int>(&highPassMicroseconds)->default_value(1000), "Background noise filter time constant in microseconds")
         ("low-pass-hz", po::value<double>(&lowPassHz)->default_value(500.0), "Low pass filter frequency (inverse of refractory period)")
         ("read-camera-ms", po::value<int>(&readCameraMilliseconds)->default_value(100), "Interval in milliseconds in which buffered data from the camera is sent to the rest of the system")
-        ("time-surface-ms", po::value<int>(&timeSurfaceMilliseconds)->default_value(30), "Decay constant of the time surfaces in milliseconds")
+        ("event-accumulator-ms", po::value<int>(&eventAccumulatorMilliseconds)->default_value(100), "Decay constant of the event accumulator in milliseconds")
+        ("event-accumulator-gain", po::value<double>(&eventAccumulatorGain)->default_value(0.25), "Contribution of individual events to the accumulator")
         ("aa-patches-x", po::value<int>(&aaSurfacePatchesX)->default_value(4), "How many grid patches for adaptive accumulation, x axis")
         ("aa-patches-y", po::value<int>(&aaSurfacePatchesY)->default_value(3), "How many grid patches for adaptive accumulation, y axis")
-        ("min-block-variance", po::value<double>(&minBlockVariance)->default_value(.05), "Minimum variance that a time surface patch must possess to be matched.")
-        ("min-block-correlation", po::value<double>(&minBlockCorrelation)->default_value(.1), "Minimum correlation between two matched blocks in stereo block matching.")
-        ("sbm-event-downsampling", po::value<int>(&sbmEventDownsampling)->default_value(50), "Rate at which we downsample events to get blocks for SBM")
+        ("min-block-variance", po::value<double>(&minBlockVariance)->default_value(100.), "Minimum variance that a time surface patch must possess to be matched.")
+        ("min-block-correlation", po::value<double>(&minBlockCorrelation)->default_value(.9), "Minimum correlation between two matched blocks in stereo block matching.")
+        ("sbm-event-downsampling", po::value<int>(&sbmEventDownsampling)->default_value(100), "Rate at which we downsample events to get blocks for SBM")
         ("sbm-half-blocksize", po::value<int>(&sbmHalfBlockSize)->default_value(12), "Block side length used in SBM minus 1 divided by two.")
         ("sbm-num-threads", po::value<int>(&sbmNumThreads)->default_value(1), "Number of threads used for SBM.")
         ("sbm-search-bound", po::value<int>(&sbmSearchBound)->default_value(100), "Matching a block from the left camera will check at most this many blocks from the right camera.");
@@ -77,7 +79,8 @@ int main(int argc, char* argv[])
     cout << "Background activity time constant: " << highPassMicroseconds << "us" << endl;
     cout << "Low pass frequency: " << lowPassHz << "Hz" << endl;
     cout << "Interval at which camera data is collected: " << readCameraMilliseconds << "ms" << endl;
-    cout << "Time surface decay time constant: " << timeSurfaceMilliseconds << "ms" << endl;
+    cout << "Event accumulator decay time constant: " << eventAccumulatorMilliseconds << "ms" << endl;
+    cout << "Event accumulator gain per event: " << eventAccumulatorGain << endl;
     cout << "Adaptive accumulation patches X: " << aaSurfacePatchesX << endl;
     cout << "Adaptive accumulation patches Y: " << aaSurfacePatchesY << endl;
     cout << "SBM minimum block variance: " << minBlockVariance << endl;
@@ -129,8 +132,8 @@ int main(int argc, char* argv[])
         leftCameraCalib.name,
         hotPixelsDir + "/hot_pixels_left_x.npy",
         hotPixelsDir + "/hot_pixels_left_y.npy",
-        highPassMicroseconds,
-        lowPassHz,
+        eventAccumulatorMilliseconds,
+        eventAccumulatorGain,
         readCameraMilliseconds,
         ref(leftEventsToMap),
         ref(leftImageToRender),
@@ -143,8 +146,8 @@ int main(int argc, char* argv[])
         rightCameraCalib.name,
         hotPixelsDir + "/hot_pixels_right_x.npy",
         hotPixelsDir + "/hot_pixels_right_y.npy",
-        highPassMicroseconds,
-        lowPassHz,
+        eventAccumulatorMilliseconds,
+        eventAccumulatorGain,
         readCameraMilliseconds,
         ref(rightImageToRender),
         ref(rightImageToMap)
@@ -161,7 +164,7 @@ int main(int argc, char* argv[])
     //thread leftImageRepresentationThread(
     //    &imageRepresentationLoop,
     //    resolution,
-    //    timeSurfaceMilliseconds,
+    //    eventAccumulatorMilliseconds,
     //    camMatL,
     //    distCoeffsL,
     //    ref(leftCameraToImage),
@@ -171,7 +174,7 @@ int main(int argc, char* argv[])
     //thread rightImageRepresentationThread(
     //    &imageRepresentationLoop,
     //    resolution,
-    //    timeSurfaceMilliseconds,
+    //    eventAccumulatorMilliseconds,
     //    camMatR,
     //    distCoeffsR,
     //    ref(rightCameraToImage),
