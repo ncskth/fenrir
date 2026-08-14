@@ -1,0 +1,169 @@
+{
+    "version": "2.0",
+    "cameras": {
+        "C0": {
+            "name": "DXM00034",
+            "position": "left",
+            "master": "true",
+            "resolution": [
+                "640",
+                "480"
+            ],
+            "principalPoint": [
+                "331.1771",
+                "233.1057"
+            ],
+            "focalLength": [
+                "662.3095",
+                "662.6664"
+            ],
+            "distortionCoefficients": [
+                "-0.35507951",
+                "0.31770527",
+                "0.00132655",
+                "0.00326416",
+                "-0.4302618"
+            ],
+            "distortionModel": "radialTangential",
+            "transformationToC0": [
+                "1",
+                "0",
+                "0",
+                "0",
+                "0",
+                "1",
+                "0",
+                "0",
+                "0",
+                "0",
+                "1",
+                "0",
+                "0",
+                "0",
+                "0",
+                "1"
+            ],
+            "metadata": {
+                "patternShape": [
+                    "0",
+                    "0"
+                ],
+                "internalPatternShape": [
+                    "0",
+                    "0"
+                ],
+                "patternType": "",
+                "patternSize": "-1",
+                "patternSpacing": "-1",
+                "calibrationTime": "",
+                "quality": "",
+                "comment": ""
+            }
+        },
+        "C1": {
+            "name": "DXM00019",
+            "position": "right",
+            "master": "false",
+            "resolution": [
+                "640",
+                "480"
+            ],
+            "principalPoint": [
+                "321.1755",
+                "239.4971"
+            ],
+            "focalLength": [
+                "666.021",
+                "665.3288"
+            ],
+            "distortionCoefficients": [
+                "-0.34833127",
+                "0.20250551",
+                "-0.00068551",
+                "0.00223948",
+                "-0.07948117"
+            ],
+            "distortionModel": "radialTangential",
+            "transformationToC0": [
+                "9.99980830e-01",
+                "2.84934398e-03",
+                "-5.49739545e-03",
+                "-0.10883681",
+                "-2.85371514e-03",
+                "9.99995618e-01",
+                "-7.87451596e-04",
+                "-0.00133049",
+                "5.49512764e-03",
+                "8.03124501e-04",
+                "9.99984579e-01",
+                "-0.00555652",
+                "0",
+                "0",
+                "0",
+                "1"
+            ],
+            "metadata": {
+                "patternShape": [
+                    "0",
+                    "0"
+                ],
+                "internalPatternShape": [
+                    "0",
+                    "0"
+                ],
+                "patternType": "",
+                "patternSize": "-1",
+                "patternSpacing": "-1",
+                "calibrationTime": "",
+                "quality": "",
+                "comment": ""
+            }
+        }
+    },
+    "imus": {
+        "S0": {
+            "name": "DVXM0019",
+            "omegaMax": "100",
+            "accMax": "98.0999985",
+            "omegaOffsetAvg": [
+                "-0.144929",
+                "0.736265",
+                "0.302699"
+            ],
+            "accOffsetAvg": [
+                "0.0038",
+                "0.0052",
+                "-0.0522"
+            ],
+            "omegaOffsetVar": "1",
+            "accOffsetVar": "1",
+            "omegaNoiseDensity": "1",
+            "accNoiseDensity": "1",
+            "omegaNoiseRandomWalk": "1",
+            "accNoiseRandomWalk": "1",
+            "timeOffsetMicros": "3500",
+            "transformationToC0": [
+                "1",
+                "0",
+                "0",
+                "0",
+                "0",
+                "1",
+                "0",
+                "0",
+                "0",
+                "0",
+                "1",
+                "0",
+                "0",
+                "0",
+                "0",
+                "1"
+            ],
+            "metadata": {
+                "calibrationTime": "",
+                "comment": ""
+            }
+        }
+    }
+}

@@ -8,21 +8,21 @@ import argparse
 import cv2 as cv
 import numpy as np
 import dv_processing as dv
-import matplotlib.pyplot as plt
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--serial_left", type=str, required=True)
-    parser.add_argument("--serial_right", type=str, required=True)
+    parser.add_argument("--calib_json", type=str, required=True)
     parser.add_argument("--output_directory", type=str, default=os.getcwd())
-    parser.add_argument("--hot_threshold", type=int, default=10)
+    parser.add_argument("--hot_threshold", type=int, default=100)
     args = parser.parse_args()
 
+    calibration = dv.camera.CalibrationSet.LoadFromFile(args.calib_json)
+
     # Open cameras
-    capture_left = dv.io.camera.open(args.serial_left)
-    capture_right = dv.io.camera.open(args.serial_right)
+    capture_left = dv.io.camera.open(calibration.getCameraCalibrations()["C0"].name)
+    capture_right = dv.io.camera.open(calibration.getCameraCalibrations()["C1"].name)
 
     # Make sure it supports event stream output, throw an error otherwise
     if not (capture_left.isEventStreamAvailable() and capture_right.isEventStreamAvailable()):
