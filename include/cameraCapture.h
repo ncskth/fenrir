@@ -26,7 +26,8 @@ namespace SlamDemo {
         const int highPassMicroseconds,
         const double lowPassHz,
         const int sendIntervalMilliseconds,
-        queue<dv::EventStore>& outgoingEvents
+        queue<cv::Mat>& outgoingImages1,
+        queue<cv::Mat>& outgoingImages2
     );
 
     void leftCameraCapture(
@@ -37,8 +38,9 @@ namespace SlamDemo {
         const int highPassMicroseconds,
         const double lowPassHz,
         const int sendIntervalMilliseconds,
-        queue<dv::EventStore>& outgoingEvents1,
-        queue<dv::EventStore>& outgoingEvents2,
+        queue<dv::EventStore>& outgoingEvents,
+        queue<cv::Mat>& outgoingImages1,
+        queue<cv::Mat>& outgoingImages2,
         queue<vector<dv::IMU>>& outgoingIMU
     );
 }

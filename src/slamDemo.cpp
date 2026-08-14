@@ -46,7 +46,7 @@ int main(int argc, char* argv[])
     int aaSurfacePatchesY;
     double minBlockVariance;
     double minBlockCorrelation;
-    int sbmMaxBlocks;
+    int sbmEventDownsampling;
     int sbmHalfBlockSize;
     int sbmNumThreads;
     int sbmSearchBound;
@@ -63,7 +63,7 @@ int main(int argc, char* argv[])
         ("aa-patches-y", po::value<int>(&aaSurfacePatchesY)->default_value(3), "How many grid patches for adaptive accumulation, y axis")
         ("min-block-variance", po::value<double>(&minBlockVariance)->default_value(.05), "Minimum variance that a time surface patch must possess to be matched.")
         ("min-block-correlation", po::value<double>(&minBlockCorrelation)->default_value(.1), "Minimum correlation between two matched blocks in stereo block matching.")
-        ("sbm-max-blocks", po::value<int>(&sbmMaxBlocks)->default_value(1000), "Maximum number of events used for stereo block matching")
+        ("sbm-event-downsampling", po::value<int>(&sbmEventDownsampling)->default_value(50), "Rate at which we downsample events to get blocks for SBM")
         ("sbm-half-blocksize", po::value<int>(&sbmHalfBlockSize)->default_value(12), "Block side length used in SBM minus 1 divided by two.")
         ("sbm-num-threads", po::value<int>(&sbmNumThreads)->default_value(1), "Number of threads used for SBM.")
         ("sbm-search-bound", po::value<int>(&sbmSearchBound)->default_value(100), "Matching a block from the left camera will check at most this many blocks from the right camera.");
@@ -82,7 +82,7 @@ int main(int argc, char* argv[])
     cout << "Adaptive accumulation patches Y: " << aaSurfacePatchesY << endl;
     cout << "SBM minimum block variance: " << minBlockVariance << endl;
     cout << "SBM minimum block correlation: " << minBlockCorrelation << endl;
-    cout << "SBM max number of blocks: " << sbmMaxBlocks << endl;
+    cout << "SBM downsampling rate of events to obtain block centers: " << sbmEventDownsampling << endl;
     cout << "SBM half block size: " << sbmHalfBlockSize << endl;
     cout << "SBM number of threads: " << sbmNumThreads << endl;
     cout << "SBM search bound: " << sbmSearchBound << endl;
@@ -110,16 +110,16 @@ int main(int argc, char* argv[])
     cv::namedWindow("Trajectory", cv::WINDOW_NORMAL);
     cv::namedWindow("Depth", cv::WINDOW_NORMAL);
 
-    queue<dv::EventStore> leftCameraToImage;
-    queue<dv::EventStore> leftCameraToMap;
-    queue<dv::EventStore> rightCameraToImage;
+    //queue<dv::EventStore> leftCameraToImage;
+    queue<dv::EventStore> leftEventsToMap;
+    //queue<dv::EventStore> rightCameraToImage;
     queue<vector<dv::IMU>> imuQueue;
     queue<cv::Mat> velocityVisQueue;
     queue<cv::Mat> leftImageToRender;
     queue<cv::Mat> rightImageToRender;
     queue<cv::Mat> leftImageToMap;
     queue<cv::Mat> rightImageToMap;
-    queue<vector<cv::Mat>> depthImageQueue;
+    queue<cv::Mat> depthImageQueue;
 
     cv::Mat trajectoryVisualization = cv::Mat::zeros(400, 400, CV_8UC1);
 
@@ -132,8 +132,9 @@ int main(int argc, char* argv[])
         highPassMicroseconds,
         lowPassHz,
         readCameraMilliseconds,
-        ref(leftCameraToImage),
-        ref(leftCameraToMap),
+        ref(leftEventsToMap),
+        ref(leftImageToRender),
+        ref(leftImageToMap),
         ref(imuQueue)
     );
     thread rightCameraCaptureThread(
@@ -145,7 +146,8 @@ int main(int argc, char* argv[])
         highPassMicroseconds,
         lowPassHz,
         readCameraMilliseconds,
-        ref(rightCameraToImage)
+        ref(rightImageToRender),
+        ref(rightImageToMap)
     );
 
     //thread trackingThread(
@@ -156,26 +158,26 @@ int main(int argc, char* argv[])
     //    ref(velocityVisQueue)
     //);
 
-    thread leftImageRepresentationThread(
-        &imageRepresentationLoop,
-        resolution,
-        timeSurfaceMilliseconds,
-        camMatL,
-        distCoeffsL,
-        ref(leftCameraToImage),
-        ref(leftImageToRender),
-        ref(leftImageToMap)
-    );
-    thread rightImageRepresentationThread(
-        &imageRepresentationLoop,
-        resolution,
-        timeSurfaceMilliseconds,
-        camMatR,
-        distCoeffsR,
-        ref(rightCameraToImage),
-        ref(rightImageToRender),
-        ref(rightImageToMap)
-    );
+    //thread leftImageRepresentationThread(
+    //    &imageRepresentationLoop,
+    //    resolution,
+    //    timeSurfaceMilliseconds,
+    //    camMatL,
+    //    distCoeffsL,
+    //    ref(leftCameraToImage),
+    //    ref(leftImageToRender),
+    //    ref(leftImageToMap)
+    //);
+    //thread rightImageRepresentationThread(
+    //    &imageRepresentationLoop,
+    //    resolution,
+    //    timeSurfaceMilliseconds,
+    //    camMatR,
+    //    distCoeffsR,
+    //    ref(rightCameraToImage),
+    //    ref(rightImageToRender),
+    //    ref(rightImageToMap)
+    //);
 
     thread depthEstimationThread(
         &depthEstimationLoop,
@@ -184,9 +186,9 @@ int main(int argc, char* argv[])
         minBlockCorrelation,
         resolution,
         sbmHalfBlockSize,
-        sbmMaxBlocks,
+        sbmEventDownsampling,
         sbmSearchBound,
-        ref(leftCameraToMap),
+        ref(leftEventsToMap),
         ref(leftImageToMap),
         ref(rightImageToMap),
         ref(depthImageQueue)
@@ -223,11 +225,11 @@ int main(int argc, char* argv[])
             imuQueue.pop();
         }
         if(!depthImageQueue.empty()) {
-            auto depthImages = depthImageQueue.front();
+            auto depthImage = depthImageQueue.front();
             depthImageQueue.pop();
-            cv::Mat depthImage;
-            cv::vconcat(depthImages[0], depthImages[1], depthImage);
-            cv::vconcat(depthImage, depthImages[2], depthImage);
+            //cv::Mat depthImage;
+            //cv::vconcat(depthImages[0], depthImages[1], depthImage);
+            //cv::vconcat(depthImage, depthImages[2], depthImage);
             cv::imshow("Depth", depthImage);
         }
         // Wait for a small amount of time to avoid CPU overhaul

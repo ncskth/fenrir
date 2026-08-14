@@ -15,7 +15,8 @@ namespace SlamDemo {
         const int highPassMicroseconds,
         const double lowPassHz,
         const int sendIntervalMilliseconds,
-        queue<dv::EventStore>& outgoingEvents
+        queue<cv::Mat>& outgoingImages1,
+        queue<cv::Mat>& outgoingImages2
         ) {
 
         // Open the stereo camera with camera names from calibration
@@ -39,7 +40,20 @@ namespace SlamDemo {
         }
         dv::EventMaskFilter maskFilter(mask);
 
-        dv::EventStore eventBuffer;
+        //dv::EventStore eventBuffer;
+
+        // Initialize an accumulator with some resolution
+        dv::Accumulator accumulator(resolution);
+
+        // Apply configuration, these values can be modified to taste
+        accumulator.setMinPotential(0.f);
+        accumulator.setMaxPotential(1.f);
+        accumulator.setNeutralPotential(0.5f);
+        accumulator.setEventContribution(0.15f);
+        accumulator.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
+        accumulator.setDecayParam(1e+6);
+        accumulator.setIgnorePolarity(false);
+        accumulator.setSynchronousDecay(false);
 
         cout << "Right camera ready!" << endl;
         sync_point.arrive_and_wait();
@@ -48,19 +62,24 @@ namespace SlamDemo {
 
         while (camera->isRunning()) {
             if (const auto raw = camera->getNextEventBatch()) {
-                highPass.accept(*raw);
-                const auto high = highPass.generateEvents();
-                lowPass.accept(high);
-                const auto low = lowPass.generateEvents();
-                maskFilter.accept(low);
+                //highPass.accept(*raw);
+                //const auto high = highPass.generateEvents();
+                //lowPass.accept(high);
+                //const auto low = lowPass.generateEvents();
+                maskFilter.accept(*raw);
                 const auto masked = maskFilter.generateEvents();
-                eventBuffer.add(masked);
+                //eventBuffer.add(masked);
+                accumulator.accept(masked);
             }
 
             auto now = chrono::high_resolution_clock::now();
-            if (now - lastQPush > sendIntervalMilliseconds * 1ms && eventBuffer.size() > 1) {
-                outgoingEvents.push(eventBuffer);
-                eventBuffer = dv::EventStore();
+            if (now - lastQPush > sendIntervalMilliseconds * 1ms) {
+                dv::Frame frame = accumulator.generateFrame();
+                cv::Mat image = frame.image;
+                outgoingImages1.push(image);
+                cv::Mat frameToDepth;
+                image.convertTo(frameToDepth, CV_64F);
+                outgoingImages2.push(frameToDepth);
 
                 sync_point.arrive_and_wait();
                 lastQPush = now;
@@ -76,8 +95,9 @@ namespace SlamDemo {
         const int highPassMicroseconds,
         const double lowPassHz,
         const int sendIntervalMilliseconds,
-        queue<dv::EventStore>& outgoingEvents1,
-        queue<dv::EventStore>& outgoingEvents2,
+        queue<dv::EventStore>& outgoingEvents,
+        queue<cv::Mat>& outgoingImages1,
+        queue<cv::Mat>& outgoingImages2,
         queue<vector<dv::IMU>>& outgoingIMU
         ) {
 
@@ -108,6 +128,19 @@ namespace SlamDemo {
         dv::EventStore eventBuffer;
         vector<dv::IMU> imuBuffer;
 
+        // Initialize an accumulator with some resolution
+        dv::Accumulator accumulator(resolution);
+
+        // Apply configuration, these values can be modified to taste
+        accumulator.setMinPotential(0.f);
+        accumulator.setMaxPotential(1.f);
+        accumulator.setNeutralPotential(0.5f);
+        accumulator.setEventContribution(0.15f);
+        accumulator.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
+        accumulator.setDecayParam(1e+6);
+        accumulator.setIgnorePolarity(false);
+        accumulator.setSynchronousDecay(false);
+
         cout << "Left camera ready!" << endl;
         sync_point.arrive_and_wait();
 
@@ -115,13 +148,14 @@ namespace SlamDemo {
 
         while (camera->isRunning()) {
             if (const auto raw = camera->getNextEventBatch()) {
-                highPass.accept(*raw);
-                const auto high = highPass.generateEvents();
-                lowPass.accept(high);
-                const auto low = lowPass.generateEvents();
-                maskFilter.accept(low);
+                //highPass.accept(*raw);
+                //const auto high = highPass.generateEvents();
+                //lowPass.accept(high);
+                //const auto low = lowPass.generateEvents();
+                maskFilter.accept(*raw);
                 const auto masked = maskFilter.generateEvents();
                 eventBuffer.add(masked);
+                accumulator.accept(masked);
             }
 
             if (const auto imuBatch = camera->getNextImuBatch()) {
@@ -130,9 +164,16 @@ namespace SlamDemo {
 
             auto now = chrono::high_resolution_clock::now();
             if (now - lastQPush > sendIntervalMilliseconds * 1ms && imuBuffer.size() > 1 && eventBuffer.size() > 1) {
-                outgoingEvents1.push(eventBuffer);
-                outgoingEvents2.push(eventBuffer);
+                outgoingEvents.push(eventBuffer);
                 eventBuffer = dv::EventStore();
+
+                dv::Frame frame = accumulator.generateFrame();
+                cv::Mat image = frame.image;
+                outgoingImages1.push(image);
+                cv::Mat frameToDepth;
+                image.convertTo(frameToDepth, CV_64F);
+                outgoingImages2.push(frameToDepth);
+
                 outgoingIMU.push(imuBuffer);
                 imuBuffer.clear();
 

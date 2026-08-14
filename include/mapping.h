@@ -84,11 +84,11 @@ namespace SlamDemo {
         const double minCorrelation,
         const cv::Size resolution,
         const int halfBlockSize,
-        const int maxNumBlocks,
+        const int downsampling,
         const int searchBound,
         queue<dv::EventStore>& incomingLeftEvents,
         queue<cv::Mat>& incomingLeftImages,
         queue<cv::Mat>& incomingRightImages,
-        queue<vector<cv::Mat>>& outgoingImages
+        queue<cv::Mat>& outgoingImages
     );
 }
