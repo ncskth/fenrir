@@ -12,9 +12,12 @@ namespace SlamDemo {
         const string serial,
         const string hotPixelXFile,
         const string hotPixelYFile,
+        const int highPassMicroseconds,
         const int accumulatorTimeConstant,
         const double accumulatorGain,
         const int sendIntervalMilliseconds,
+        const cv::Matx33f cameraMatrix,
+        const vector<float> distortionCoeffs,
         queue<cv::Mat>& outgoingImages1,
         queue<cv::Mat>& outgoingImages2
         ) {
@@ -27,7 +30,7 @@ namespace SlamDemo {
             throw dv::exceptions::RuntimeError("Input camera does not provide an event stream.");
         }
 
-        //dv::noise::BackgroundActivityNoiseFilter highPass(resolution, highPassMicroseconds*1us);
+        dv::noise::BackgroundActivityNoiseFilter highPass(resolution, highPassMicroseconds*1us);
         //dv::noise::LowPassFilter lowPass(resolution, lowPassHz);
 
         auto hotPixelsX = cnpy::npy_load(hotPixelXFile);
@@ -53,7 +56,7 @@ namespace SlamDemo {
         accumulator.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
         accumulator.setDecayParam(1e3*accumulatorTimeConstant);
         accumulator.setIgnorePolarity(false);
-        accumulator.setSynchronousDecay(false);
+        accumulator.setSynchronousDecay(true);
 
         cout << "Right camera ready!" << endl;
         sync_point.arrive_and_wait();
@@ -62,11 +65,11 @@ namespace SlamDemo {
 
         while (camera->isRunning()) {
             if (const auto raw = camera->getNextEventBatch()) {
-                //highPass.accept(*raw);
-                //const auto high = highPass.generateEvents();
+                highPass.accept(*raw);
+                const auto high = highPass.generateEvents();
                 //lowPass.accept(high);
                 //const auto low = lowPass.generateEvents();
-                maskFilter.accept(*raw);
+                maskFilter.accept(high);
                 const auto masked = maskFilter.generateEvents();
                 //eventBuffer.add(masked);
                 accumulator.accept(masked);
@@ -75,12 +78,14 @@ namespace SlamDemo {
             auto now = chrono::high_resolution_clock::now();
             if (now - lastQPush > sendIntervalMilliseconds * 1ms) {
                 dv::Frame frame = accumulator.generateFrame();
-                cv::Mat image = frame.image;
-                cv::Mat blurred;
-                cv::blur(image, blurred, cv::Size(5, 5));
-                outgoingImages1.push(blurred);
+                cv::Mat imageDistorted = frame.image;
+                cv::Mat image;
+                cv::undistort(imageDistorted, image, cameraMatrix, distortionCoeffs);
+                //cv::Mat blurred;
+                //cv::blur(image, blurred, cv::Size(5, 5));
+                outgoingImages1.push(image);
                 cv::Mat frameToDepth;
-                blurred.convertTo(frameToDepth, CV_64F);
+                image.convertTo(frameToDepth, CV_64F);
                 outgoingImages2.push(frameToDepth);
 
                 sync_point.arrive_and_wait();
@@ -94,9 +99,12 @@ namespace SlamDemo {
         const string serial,
         const string hotPixelXFile,
         const string hotPixelYFile,
+        const int highPassMicroseconds,
         const int accumulatorTimeConstant,
         const double accumulatorGain,
         const int sendIntervalMilliseconds,
+        const cv::Matx33f cameraMatrix,
+        const vector<float> distortionCoeffs,
         queue<dv::EventStore>& outgoingEvents,
         queue<cv::Mat>& outgoingImages1,
         queue<cv::Mat>& outgoingImages2,
@@ -114,7 +122,7 @@ namespace SlamDemo {
             throw dv::exceptions::RuntimeError("Input camera does not provide an IMU stream.");
         }
 
-        //dv::noise::BackgroundActivityNoiseFilter highPass(resolution, highPassMicroseconds*1us);
+        dv::noise::BackgroundActivityNoiseFilter highPass(resolution, highPassMicroseconds*1us);
         //dv::noise::LowPassFilter lowPass(resolution, lowPassHz);
 
         auto hotPixelsX = cnpy::npy_load(hotPixelXFile);
@@ -141,7 +149,7 @@ namespace SlamDemo {
         accumulator.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
         accumulator.setDecayParam(1e3*accumulatorTimeConstant);
         accumulator.setIgnorePolarity(false);
-        accumulator.setSynchronousDecay(false);
+        accumulator.setSynchronousDecay(true);
 
         cout << "Left camera ready!" << endl;
         sync_point.arrive_and_wait();
@@ -150,11 +158,11 @@ namespace SlamDemo {
 
         while (camera->isRunning()) {
             if (const auto raw = camera->getNextEventBatch()) {
-                //highPass.accept(*raw);
-                //const auto high = highPass.generateEvents();
+                highPass.accept(*raw);
+                const auto high = highPass.generateEvents();
                 //lowPass.accept(high);
                 //const auto low = lowPass.generateEvents();
-                maskFilter.accept(*raw);
+                maskFilter.accept(high);
                 const auto masked = maskFilter.generateEvents();
                 eventBuffer.add(masked);
                 accumulator.accept(masked);
@@ -170,12 +178,14 @@ namespace SlamDemo {
                 eventBuffer = dv::EventStore();
 
                 dv::Frame frame = accumulator.generateFrame();
-                cv::Mat image = frame.image;
-                cv::Mat blurred;
-                cv::blur(image, blurred, cv::Size(5, 5));
-                outgoingImages1.push(blurred);
+                cv::Mat imageDistorted = frame.image;
+                cv::Mat image;
+                cv::undistort(imageDistorted, image, cameraMatrix, distortionCoeffs);
+                //cv::Mat blurred;
+                //cv::blur(image, blurred, cv::Size(5, 5));
+                outgoingImages1.push(image);
                 cv::Mat frameToDepth;
-                blurred.convertTo(frameToDepth, CV_64F);
+                image.convertTo(frameToDepth, CV_64F);
                 outgoingImages2.push(frameToDepth);
 
                 outgoingIMU.push(imuBuffer);

@@ -21,7 +21,7 @@ Pass the flag `--no_filters` to see unfiltered events.
 From the project directory, simply run the executable:
 
 ```
-ncs@fenrir:~/Eben/fenrir$ build/SlamDemo --calibration-json fenrir_calibration.json --hot-pixels-dir hot_pixels_fenrir --sbm-num-threads 14
+ncs@fenrir:~/Eben/fenrir$ build/SlamDemo --calibration-json fenrir_calibration.json --hot-pixels-dir hot_pixels_fenrir --sbm-num-threads 14 --sbm-event-downsampling 200 --min-block-variance 100 --min-block-correlation 0.65 --sbm-half-blocksize 21
 ```
 
 `--sbm-num-threads` is one of many adjustable flags, in this case controlling the number of threads dispatched for each stereo block matching operation.
