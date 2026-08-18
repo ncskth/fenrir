@@ -113,11 +113,11 @@ int main(int argc, char* argv[])
     cv::namedWindow("Trajectory", cv::WINDOW_NORMAL);
     cv::namedWindow("Depth", cv::WINDOW_NORMAL);
 
-    //queue<dv::EventStore> leftCameraToImage;
+    queue<dv::EventStore> leftEventsToImage;
     queue<dv::EventStore> leftEventsToMap;
-    //queue<dv::EventStore> rightCameraToImage;
+    queue<dv::EventStore> rightEventsToImage;
     queue<vector<dv::IMU>> imuQueue;
-    queue<cv::Mat> velocityVisQueue;
+    //queue<cv::Mat> velocityVisQueue;
     queue<cv::Mat> leftImageToRender;
     queue<cv::Mat> rightImageToRender;
     queue<cv::Mat> leftImageToMap;
@@ -133,14 +133,14 @@ int main(int argc, char* argv[])
         hotPixelsDir + "/hot_pixels_left_x.npy",
         hotPixelsDir + "/hot_pixels_left_y.npy",
         highPassMicroseconds,
-        eventAccumulatorMilliseconds,
-        eventAccumulatorGain,
+        //eventAccumulatorMilliseconds,
+        //eventAccumulatorGain,
         readCameraMilliseconds,
-        camMatL,
-        distCoeffsL,
+        //camMatL,
+        //distCoeffsL,
+        ref(leftEventsToImage),
         ref(leftEventsToMap),
-        ref(leftImageToRender),
-        ref(leftImageToMap),
+        //ref(leftImageToMap),
         ref(imuQueue)
     );
     thread rightCameraCaptureThread(
@@ -150,13 +150,13 @@ int main(int argc, char* argv[])
         hotPixelsDir + "/hot_pixels_right_x.npy",
         hotPixelsDir + "/hot_pixels_right_y.npy",
         highPassMicroseconds,
-        eventAccumulatorMilliseconds,
-        eventAccumulatorGain,
+        //eventAccumulatorMilliseconds,
+        //eventAccumulatorGain,
         readCameraMilliseconds,
-        camMatR,
-        distCoeffsR,
-        ref(rightImageToRender),
-        ref(rightImageToMap)
+        //camMatR,
+        //distCoeffsR,
+        ref(rightEventsToImage)
+        //ref(rightImageToMap)
     );
 
     //thread trackingThread(
@@ -167,26 +167,26 @@ int main(int argc, char* argv[])
     //    ref(velocityVisQueue)
     //);
 
-    //thread leftImageRepresentationThread(
-    //    &imageRepresentationLoop,
-    //    resolution,
-    //    eventAccumulatorMilliseconds,
-    //    camMatL,
-    //    distCoeffsL,
-    //    ref(leftCameraToImage),
-    //    ref(leftImageToRender),
-    //    ref(leftImageToMap)
-    //);
-    //thread rightImageRepresentationThread(
-    //    &imageRepresentationLoop,
-    //    resolution,
-    //    eventAccumulatorMilliseconds,
-    //    camMatR,
-    //    distCoeffsR,
-    //    ref(rightCameraToImage),
-    //    ref(rightImageToRender),
-    //    ref(rightImageToMap)
-    //);
+    thread leftImageRepresentationThread(
+        &imageRepresentationLoop,
+        resolution,
+        //eventAccumulatorMilliseconds,
+        ref(camMatL),
+        ref(distCoeffsL),
+        ref(leftEventsToImage),
+        ref(leftImageToRender),
+        ref(leftImageToMap)
+    );
+    thread rightImageRepresentationThread(
+        &imageRepresentationLoop,
+        resolution,
+        //eventAccumulatorMilliseconds,
+        ref(camMatR),
+        ref(distCoeffsR),
+        ref(rightEventsToImage),
+        ref(rightImageToRender),
+        ref(rightImageToMap)
+    );
 
     thread depthEstimationThread(
         &depthEstimationLoop,

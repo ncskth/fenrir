@@ -168,31 +168,15 @@ namespace SlamDemo {
         const cv::Size resolution,
         const cv::Matx33f cameraMatrix,
         const vector<float> distortionCoefficients,
-        const int tsDecayMs,
-        vector<int64_t>& lastPosts,
-        vector<int64_t>& lastNegts,
+        //const int tsDecayMs,
+        //vector<int64_t>& lastPosts,
+        //vector<int64_t>& lastNegts,
         dv::EventStore &events)
     {
-        int64_t recentTime = events[events.size() - 1].timestamp();
-        for(auto ev : events) {
-            if(ev.polarity()) {
-                lastPosts[ev.x() + resolution.width*ev.y()] = ev.timestamp();
-            }
-            else {
-                lastNegts[ev.x() + resolution.width*ev.y()] = ev.timestamp();
-            }
-        }
-        cv::Mat posTSDistorted = cv::Mat(resolution, CV_64FC1);
-        cv::Mat negTSDistorted = cv::Mat(resolution, CV_64FC1);
-        for(size_t i = 0; i < resolution.area(); i++) {
-            posTSDistorted.at<double>(i/resolution.width, i%resolution.width) = exp((1e-3*(lastPosts[i] - recentTime)/tsDecayMs));
-            negTSDistorted.at<double>(i/resolution.width, i%resolution.width) = exp((1e-3*(lastNegts[i] - recentTime)/tsDecayMs));
-        }
-        cv::Mat combinedTSDistorted = posTSDistorted - negTSDistorted;
-        cv::Mat combinedTS;
-        cv::undistort(combinedTSDistorted, combinedTS, cameraMatrix, distortionCoefficients);
-
-        return combinedTS;
+        cv::Mat image = adaptiveAccumulation(resolution, 1, 1, events);
+        cv::Mat aa;
+        cv::undistort(image, aa, cameraMatrix, distortionCoefficients);
+        return aa;
     }
 
     void leftImageRepresentationLoop(
@@ -245,7 +229,7 @@ namespace SlamDemo {
 
     void imageRepresentationLoop(
         const cv::Size resolution,
-        const int timeSurfaceMilliseconds,
+        //const int timeSurfaceMilliseconds,
         const cv::Matx33f &cameraMatrix,
         const vector<float> &distortionCoefficients,
         queue<dv::EventStore> &incomingEvents,
@@ -267,12 +251,12 @@ namespace SlamDemo {
                     resolution,
                     cameraMatrix,
                     distortionCoefficients,
-                    timeSurfaceMilliseconds,
-                    ref(lastPositiveTimestamps),
-                    ref(lastNegativeTimestamps),
+                    //timeSurfaceMilliseconds,
+                    //ref(lastPositiveTimestamps),
+                    //ref(lastNegativeTimestamps),
                     events
                 );
-                cv::Mat imageScaled = 127.*image + 128.;
+                cv::Mat imageScaled = 255.*image;
                 cv::Mat imageToRender;
                 imageScaled.convertTo(imageToRender, CV_8UC1);
                 outgoingImages1.push(imageToRender);

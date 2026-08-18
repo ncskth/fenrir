@@ -13,13 +13,12 @@ namespace SlamDemo {
         const string hotPixelXFile,
         const string hotPixelYFile,
         const int highPassMicroseconds,
-        const int accumulatorTimeConstant,
-        const double accumulatorGain,
+        //const int accumulatorTimeConstant,
+        //const double accumulatorGain,
         const int sendIntervalMilliseconds,
-        const cv::Matx33f cameraMatrix,
-        const vector<float> distortionCoeffs,
-        queue<cv::Mat>& outgoingImages1,
-        queue<cv::Mat>& outgoingImages2
+        //const cv::Matx33f cameraMatrix,
+        //const vector<float> distortionCoeffs,
+        queue<dv::EventStore>& outgoingEvents
         ) {
 
         // Open the stereo camera with camera names from calibration
@@ -41,22 +40,22 @@ namespace SlamDemo {
             int y = hotPixelsY.data<int>()[i];
             mask.at<uchar>(x, y) = 0;
         }
-        dv::EventMaskFilter maskFilter(mask);
+        dv::EventMaskFilter maskFilter(mask.t());
 
-        //dv::EventStore eventBuffer;
+        dv::EventStore eventBuffer;
 
         // Initialize an accumulator with some resolution
         dv::Accumulator accumulator(resolution);
 
         // Apply configuration, these values can be modified to taste
-        accumulator.setMinPotential(0.f);
-        accumulator.setMaxPotential(1.f);
-        accumulator.setNeutralPotential(0.5f);
-        accumulator.setEventContribution(accumulatorGain);
-        accumulator.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
-        accumulator.setDecayParam(1e3*accumulatorTimeConstant);
-        accumulator.setIgnorePolarity(false);
-        accumulator.setSynchronousDecay(true);
+        //accumulator.setMinPotential(0.f);
+        //accumulator.setMaxPotential(1.f);
+        //accumulator.setNeutralPotential(0.5f);
+        //accumulator.setEventContribution(accumulatorGain);
+        //accumulator.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
+        //accumulator.setDecayParam(1e3*accumulatorTimeConstant);
+        //accumulator.setIgnorePolarity(false);
+        //accumulator.setSynchronousDecay(true);
 
         cout << "Right camera ready!" << endl;
         sync_point.arrive_and_wait();
@@ -71,22 +70,25 @@ namespace SlamDemo {
                 //const auto low = lowPass.generateEvents();
                 maskFilter.accept(high);
                 const auto masked = maskFilter.generateEvents();
-                //eventBuffer.add(masked);
-                accumulator.accept(masked);
+                eventBuffer.add(masked);
+                //accumulator.accept(masked);
             }
 
             auto now = chrono::high_resolution_clock::now();
             if (now - lastQPush > sendIntervalMilliseconds * 1ms) {
-                dv::Frame frame = accumulator.generateFrame();
-                cv::Mat imageDistorted = frame.image;
-                cv::Mat image;
-                cv::undistort(imageDistorted, image, cameraMatrix, distortionCoeffs);
+                outgoingEvents.push(eventBuffer);
+                eventBuffer = dv::EventStore();
+
+                //dv::Frame frame = accumulator.generateFrame();
+                //cv::Mat imageDistorted = frame.image;
+                //cv::Mat image;
+                //cv::undistort(imageDistorted, image, cameraMatrix, distortionCoeffs);
                 //cv::Mat blurred;
                 //cv::blur(image, blurred, cv::Size(5, 5));
-                outgoingImages1.push(image);
-                cv::Mat frameToDepth;
-                image.convertTo(frameToDepth, CV_64F);
-                outgoingImages2.push(frameToDepth);
+                //outgoingImages1.push(image);
+                //cv::Mat frameToDepth;
+                //image.convertTo(frameToDepth, CV_64F);
+                //outgoingImages2.push(frameToDepth);
 
                 sync_point.arrive_and_wait();
                 lastQPush = now;
@@ -100,14 +102,14 @@ namespace SlamDemo {
         const string hotPixelXFile,
         const string hotPixelYFile,
         const int highPassMicroseconds,
-        const int accumulatorTimeConstant,
-        const double accumulatorGain,
+        //const int accumulatorTimeConstant,
+        //const double accumulatorGain,
         const int sendIntervalMilliseconds,
-        const cv::Matx33f cameraMatrix,
-        const vector<float> distortionCoeffs,
-        queue<dv::EventStore>& outgoingEvents,
-        queue<cv::Mat>& outgoingImages1,
-        queue<cv::Mat>& outgoingImages2,
+        //const cv::Matx33f cameraMatrix,
+        //const vector<float> distortionCoeffs,
+        //queue<dv::EventStore>& outgoingEvents,
+        queue<dv::EventStore>& outgoingEvents1,
+        queue<dv::EventStore>& outgoingEvents2,
         queue<vector<dv::IMU>>& outgoingIMU
         ) {
 
@@ -133,23 +135,23 @@ namespace SlamDemo {
             int y = hotPixelsY.data<int>()[i];
             mask.at<uchar>(x, y) = 0;
         }
-        dv::EventMaskFilter maskFilter(mask);
+        dv::EventMaskFilter maskFilter(mask.t());
 
         dv::EventStore eventBuffer;
         vector<dv::IMU> imuBuffer;
 
         // Initialize an accumulator with some resolution
-        dv::Accumulator accumulator(resolution);
+        //dv::Accumulator accumulator(resolution);
 
         // Apply configuration, these values can be modified to taste
-        accumulator.setMinPotential(0.f);
-        accumulator.setMaxPotential(1.f);
-        accumulator.setNeutralPotential(0.5f);
-        accumulator.setEventContribution(accumulatorGain);
-        accumulator.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
-        accumulator.setDecayParam(1e3*accumulatorTimeConstant);
-        accumulator.setIgnorePolarity(false);
-        accumulator.setSynchronousDecay(true);
+        //accumulator.setMinPotential(0.f);
+        //accumulator.setMaxPotential(1.f);
+        //accumulator.setNeutralPotential(0.5f);
+        //accumulator.setEventContribution(accumulatorGain);
+        //accumulator.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
+        //accumulator.setDecayParam(1e3*accumulatorTimeConstant);
+        //accumulator.setIgnorePolarity(false);
+        //accumulator.setSynchronousDecay(true);
 
         cout << "Left camera ready!" << endl;
         sync_point.arrive_and_wait();
@@ -165,7 +167,7 @@ namespace SlamDemo {
                 maskFilter.accept(high);
                 const auto masked = maskFilter.generateEvents();
                 eventBuffer.add(masked);
-                accumulator.accept(masked);
+                //accumulator.accept(masked);
             }
 
             if (const auto imuBatch = camera->getNextImuBatch()) {
@@ -174,19 +176,20 @@ namespace SlamDemo {
 
             auto now = chrono::high_resolution_clock::now();
             if (now - lastQPush > sendIntervalMilliseconds * 1ms && imuBuffer.size() > 1 && eventBuffer.size() > 1) {
-                outgoingEvents.push(eventBuffer);
+                outgoingEvents1.push(eventBuffer);
+                outgoingEvents2.push(eventBuffer);
                 eventBuffer = dv::EventStore();
 
-                dv::Frame frame = accumulator.generateFrame();
-                cv::Mat imageDistorted = frame.image;
-                cv::Mat image;
-                cv::undistort(imageDistorted, image, cameraMatrix, distortionCoeffs);
+                //dv::Frame frame = accumulator.generateFrame();
+                //cv::Mat imageDistorted = frame.image;
+                //cv::Mat image;
+                //cv::undistort(imageDistorted, image, cameraMatrix, distortionCoeffs);
                 //cv::Mat blurred;
                 //cv::blur(image, blurred, cv::Size(5, 5));
-                outgoingImages1.push(image);
-                cv::Mat frameToDepth;
-                image.convertTo(frameToDepth, CV_64F);
-                outgoingImages2.push(frameToDepth);
+                //outgoingImages1.push(image);
+                //cv::Mat frameToDepth;
+                //image.convertTo(frameToDepth, CV_64F);
+                //outgoingImages2.push(frameToDepth);
 
                 outgoingIMU.push(imuBuffer);
                 imuBuffer.clear();

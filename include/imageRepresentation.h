@@ -33,9 +33,9 @@ namespace SlamDemo {
         const cv::Size resolution,
         const cv::Matx33f cameraMatrix,
         const vector<float> distortionCoefficients,
-        const int tsDecayMs,
-        vector<int64_t>& lastPosts,
-        vector<int64_t>& lastNegts,
+        //const int tsDecayMs,
+        //vector<int64_t>& lastPosts,
+        //vector<int64_t>& lastNegts,
         dv::EventStore &events
     );
 
@@ -54,7 +54,7 @@ namespace SlamDemo {
 
     void imageRepresentationLoop(
         const cv::Size resolution,
-        const int timeSurfaceMilliseconds,
+        //const int timeSurfaceMilliseconds,
         const cv::Matx33f &cameraMatrix,
         const vector<float> &distortionCoefficients,
         queue<dv::EventStore> &incomingEvents,

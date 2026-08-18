@@ -24,13 +24,12 @@ namespace SlamDemo {
         const string hotPixelXFile,
         const string hotPixelYFile,
         const int highPassMicroseconds,
-        const int accumulatorTimeConstant,
-        const double accumulatorGain,
+        //const int accumulatorTimeConstant,
+        //const double accumulatorGain,
         const int sendIntervalMilliseconds,
-        const cv::Matx33f cameraMatrix,
-        const vector<float> distortionCoeffs,
-        queue<cv::Mat>& outgoingImages1,
-        queue<cv::Mat>& outgoingImages2
+        //const cv::Matx33f cameraMatrix,
+        //const vector<float> distortionCoeffs,
+        queue<dv::EventStore>& outgoingEvents
     );
 
     void leftCameraCapture(
@@ -39,14 +38,14 @@ namespace SlamDemo {
         const string hotPixelXFile,
         const string hotPixelYFile,
         const int highPassMicroseconds,
-        const int accumulatorTimeConstant,
-        const double accumulatorGain,
+        //const int accumulatorTimeConstant,
+        //const double accumulatorGain,
         const int sendIntervalMilliseconds,
-        const cv::Matx33f cameraMatrix,
-        const vector<float> distortionCoeffs,
-        queue<dv::EventStore>& outgoingEvents,
-        queue<cv::Mat>& outgoingImages1,
-        queue<cv::Mat>& outgoingImages2,
+        //const cv::Matx33f cameraMatrix,
+        //const vector<float> distortionCoeffs,
+        //queue<dv::EventStore>& outgoingEvents,
+        queue<dv::EventStore>& outgoingEvents1,
+        queue<dv::EventStore>& outgoingEvents2,
         queue<vector<dv::IMU>>& outgoingIMU
     );
 }
