@@ -9,7 +9,7 @@ namespace SlamDemo {
     {
         double dx = (img.at<double>(x + 1, y) + 0.5 * (img.at<double>(x + 1, y + 1) + img.at<double>(x + 1, y + 1))) - (img.at<double>(x - 1, y) + 0.5 * (img.at<double>(x - 1, y + 1) + img.at<double>(x - 1, y + 1)));
         double dy = (img.at<double>(x, y + 1) + 0.5 * (img.at<double>(x + 1, y + 1) + img.at<double>(x - 1, y + 1))) - (img.at<double>(x, y - 1) + 0.5 * (img.at<double>(x + 1, y - 1) + img.at<double>(x - 1, y - 1)));
-        return abs(dx) < 0.5*abs(dy);
+        return abs(dx) < abs(dy);
     }
 
     StereoBlockMatch matchSingleBlock(

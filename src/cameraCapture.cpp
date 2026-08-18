@@ -56,7 +56,7 @@ namespace SlamDemo {
         accumulator.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
         accumulator.setDecayParam(1e3*accumulatorTimeConstant);
         accumulator.setIgnorePolarity(false);
-        accumulator.setSynchronousDecay(true);
+        accumulator.setSynchronousDecay(false);
 
         cout << "Right camera ready!" << endl;
         sync_point.arrive_and_wait();
@@ -65,14 +65,14 @@ namespace SlamDemo {
 
         while (camera->isRunning()) {
             if (const auto raw = camera->getNextEventBatch()) {
-                highPass.accept(*raw);
-                const auto high = highPass.generateEvents();
+                //highPass.accept(*raw);
+                //const auto high = highPass.generateEvents();
                 //lowPass.accept(high);
                 //const auto low = lowPass.generateEvents();
-                maskFilter.accept(high);
-                const auto masked = maskFilter.generateEvents();
+                //maskFilter.accept(high);
+                //const auto masked = maskFilter.generateEvents();
                 //eventBuffer.add(masked);
-                accumulator.accept(masked);
+                accumulator.accept(*raw);
             }
 
             auto now = chrono::high_resolution_clock::now();
@@ -81,11 +81,11 @@ namespace SlamDemo {
                 cv::Mat imageDistorted = frame.image;
                 cv::Mat image;
                 cv::undistort(imageDistorted, image, cameraMatrix, distortionCoeffs);
-                //cv::Mat blurred;
-                //cv::blur(image, blurred, cv::Size(5, 5));
-                outgoingImages1.push(image);
+                cv::Mat blurred;
+                cv::blur(image, blurred, cv::Size(5, 5));
+                outgoingImages1.push(blurred);
                 cv::Mat frameToDepth;
-                image.convertTo(frameToDepth, CV_64F);
+                blurred.convertTo(frameToDepth, CV_64F);
                 outgoingImages2.push(frameToDepth);
 
                 sync_point.arrive_and_wait();
@@ -149,7 +149,7 @@ namespace SlamDemo {
         accumulator.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
         accumulator.setDecayParam(1e3*accumulatorTimeConstant);
         accumulator.setIgnorePolarity(false);
-        accumulator.setSynchronousDecay(true);
+        accumulator.setSynchronousDecay(false);
 
         cout << "Left camera ready!" << endl;
         sync_point.arrive_and_wait();
@@ -158,14 +158,14 @@ namespace SlamDemo {
 
         while (camera->isRunning()) {
             if (const auto raw = camera->getNextEventBatch()) {
-                highPass.accept(*raw);
-                const auto high = highPass.generateEvents();
+                //highPass.accept(*raw);
+                //const auto high = highPass.generateEvents();
                 //lowPass.accept(high);
                 //const auto low = lowPass.generateEvents();
-                maskFilter.accept(high);
-                const auto masked = maskFilter.generateEvents();
-                eventBuffer.add(masked);
-                accumulator.accept(masked);
+                //maskFilter.accept(high);
+                //const auto masked = maskFilter.generateEvents();
+                eventBuffer.add(*raw);
+                accumulator.accept(*raw);
             }
 
             if (const auto imuBatch = camera->getNextImuBatch()) {
@@ -181,11 +181,11 @@ namespace SlamDemo {
                 cv::Mat imageDistorted = frame.image;
                 cv::Mat image;
                 cv::undistort(imageDistorted, image, cameraMatrix, distortionCoeffs);
-                //cv::Mat blurred;
-                //cv::blur(image, blurred, cv::Size(5, 5));
-                outgoingImages1.push(image);
+                cv::Mat blurred;
+                cv::blur(image, blurred, cv::Size(5, 5));
+                outgoingImages1.push(blurred);
                 cv::Mat frameToDepth;
-                image.convertTo(frameToDepth, CV_64F);
+                blurred.convertTo(frameToDepth, CV_64F);
                 outgoingImages2.push(frameToDepth);
 
                 outgoingIMU.push(imuBuffer);

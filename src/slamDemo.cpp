@@ -59,8 +59,8 @@ int main(int argc, char* argv[])
         ("high-pass-us", po::value<int>(&highPassMicroseconds)->default_value(1000), "Background noise filter time constant in microseconds")
         ("low-pass-hz", po::value<double>(&lowPassHz)->default_value(500.0), "Low pass filter frequency (inverse of refractory period)")
         ("read-camera-ms", po::value<int>(&readCameraMilliseconds)->default_value(100), "Interval in milliseconds in which buffered data from the camera is sent to the rest of the system")
-        ("event-accumulator-ms", po::value<int>(&eventAccumulatorMilliseconds)->default_value(100), "Decay constant of the event accumulator in milliseconds")
-        ("event-accumulator-gain", po::value<double>(&eventAccumulatorGain)->default_value(0.25), "Contribution of individual events to the accumulator")
+        ("event-accumulator-ms", po::value<int>(&eventAccumulatorMilliseconds)->default_value(1000), "Decay constant of the event accumulator in milliseconds")
+        ("event-accumulator-gain", po::value<double>(&eventAccumulatorGain)->default_value(0.15), "Contribution of individual events to the accumulator")
         ("aa-patches-x", po::value<int>(&aaSurfacePatchesX)->default_value(4), "How many grid patches for adaptive accumulation, x axis")
         ("aa-patches-y", po::value<int>(&aaSurfacePatchesY)->default_value(3), "How many grid patches for adaptive accumulation, y axis")
         ("min-block-variance", po::value<double>(&minBlockVariance)->default_value(100.), "Minimum variance that a time surface patch must possess to be matched.")
@@ -205,11 +205,17 @@ int main(int argc, char* argv[])
 
     // Run the processing loop while both cameras are connected
     while (true) {
-        if (!leftImageToRender.empty() && !rightImageToRender.empty()) {
+        if (!leftImageToRender.empty() && !rightImageToRender.empty() && !depthImageQueue.empty()) {
             cv::Mat leftImage = leftImageToRender.front();
             leftImageToRender.pop();
             cv::Mat rightImage = rightImageToRender.front();
             rightImageToRender.pop();
+            auto depthImage = depthImageQueue.front();
+            depthImageQueue.pop();
+            cv::Mat leftImageBGR;
+            cv::cvtColor(leftImage, leftImageBGR, cv::COLOR_GRAY2BGR);
+            cv::Mat leftDepthDisplay = leftImageBGR.clone();
+            depthImage.copyTo(leftDepthDisplay, depthImage != 0);
             /*
             cv::Mat rightImage;
             cv::vconcat(rightImageToRender.front()[0], rightImageToRender.front()[1], rightImage);
@@ -222,7 +228,7 @@ int main(int argc, char* argv[])
             cv::vconcat(leftImage, get<0>(leftqFront)[2], leftImage);
             */
 
-            cv::imshow("Left", leftImage);
+            cv::imshow("Left", leftDepthDisplay);
             cv::imshow("Right", rightImage);
         }
         //if (!velocityVisQueue.empty()) {
@@ -232,14 +238,6 @@ int main(int argc, char* argv[])
         //}
         if (!imuQueue.empty()) {
             imuQueue.pop();
-        }
-        if(!depthImageQueue.empty()) {
-            auto depthImage = depthImageQueue.front();
-            depthImageQueue.pop();
-            //cv::Mat depthImage;
-            //cv::vconcat(depthImages[0], depthImages[1], depthImage);
-            //cv::vconcat(depthImage, depthImages[2], depthImage);
-            cv::imshow("Depth", depthImage);
         }
         // Wait for a small amount of time to avoid CPU overhaul
         cv::waitKey(2);
