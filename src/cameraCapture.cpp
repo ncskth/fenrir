@@ -69,10 +69,10 @@ namespace SlamDemo {
                 //const auto high = highPass.generateEvents();
                 //lowPass.accept(high);
                 //const auto low = lowPass.generateEvents();
-                //maskFilter.accept(high);
-                //const auto masked = maskFilter.generateEvents();
+                maskFilter.accept(*raw);
+                const auto masked = maskFilter.generateEvents();
                 //eventBuffer.add(masked);
-                accumulator.accept(*raw);
+                accumulator.accept(masked);
             }
 
             auto now = chrono::high_resolution_clock::now();
@@ -82,7 +82,7 @@ namespace SlamDemo {
                 cv::Mat image;
                 cv::undistort(imageDistorted, image, cameraMatrix, distortionCoeffs);
                 cv::Mat blurred;
-                cv::blur(image, blurred, cv::Size(5, 5));
+                cv::blur(image, blurred, cv::Size(3, 3));
                 outgoingImages1.push(blurred);
                 cv::Mat frameToDepth;
                 blurred.convertTo(frameToDepth, CV_64F);
@@ -162,10 +162,10 @@ namespace SlamDemo {
                 //const auto high = highPass.generateEvents();
                 //lowPass.accept(high);
                 //const auto low = lowPass.generateEvents();
-                //maskFilter.accept(high);
-                //const auto masked = maskFilter.generateEvents();
-                eventBuffer.add(*raw);
-                accumulator.accept(*raw);
+                maskFilter.accept(*raw);
+                const auto masked = maskFilter.generateEvents();
+                eventBuffer.add(masked);
+                accumulator.accept(masked);
             }
 
             if (const auto imuBatch = camera->getNextImuBatch()) {
@@ -182,12 +182,11 @@ namespace SlamDemo {
                 cv::Mat image;
                 cv::undistort(imageDistorted, image, cameraMatrix, distortionCoeffs);
                 cv::Mat blurred;
-                cv::blur(image, blurred, cv::Size(5, 5));
+                cv::blur(image, blurred, cv::Size(3, 3));
                 outgoingImages1.push(blurred);
                 cv::Mat frameToDepth;
                 blurred.convertTo(frameToDepth, CV_64F);
                 outgoingImages2.push(frameToDepth);
-
                 outgoingIMU.push(imuBuffer);
                 imuBuffer.clear();
 
