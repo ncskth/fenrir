@@ -12,23 +12,23 @@ namespace SlamDemo {
         const double positiveFactor,
         const double negativeFactor,
         const dv::EventStore& events,
-        vector<double>& accumulator
+        vector<uint8_t>& accumulator
     ) {
         for(auto ev : events) {
             if(ev.polarity())  {
-                accumulator[resolution.width*ev.y() + ev.x()] = min(1.0, positiveFactor*accumulator[resolution.width*ev.y() + ev.x()]);
+                accumulator[resolution.width*ev.y() + ev.x()] = 255;
             }
             else {
-                accumulator[resolution.width*ev.y() + ev.x()] = max(0.0, negativeFactor*accumulator[resolution.width*ev.y() + ev.x()]);
+                accumulator[resolution.width*ev.y() + ev.x()] = 0;
             }
         }
         //cout << "Accumulator updated!" << endl;
     }
 
-    cv::Mat generateImage(const cv::Size resolution, vector<double>& accumulator) {
+    cv::Mat generateImage(const cv::Size resolution, vector<uint8_t>& accumulator) {
         cv::Mat result(resolution, CV_8UC1);
         for(int i = 0; i < resolution.area(); i++) {
-            result.at<uint8_t>(i/resolution.width, i%resolution.width) = (uint8_t)(255*accumulator[i]);
+            result.at<uint8_t>(i/resolution.width, i%resolution.width) = accumulator[i];
         }
         return result;
     }
@@ -44,6 +44,7 @@ namespace SlamDemo {
         const double positiveFactor,
         const double negativeFactor,
         const int sendIntervalMilliseconds,
+        const int sendEventCount,
         const cv::Matx33f cameraMatrix,
         const vector<float> distortionCoeffs,
         queue<cv::Mat>& outgoingImages1,
@@ -86,16 +87,17 @@ namespace SlamDemo {
         //accumulator.setIgnorePolarity(false);
         //accumulator.setSynchronousDecay(false);
 
-        vector<double> accumulator;
+        vector<uint8_t> accumulator;
         accumulator.reserve(resolution.area());
         for(int i = 0; i < resolution.area(); i++) {
-            accumulator[i] = 0.5;
+            accumulator[i] = 127;
         }
 
         cout << "Right camera ready!" << endl;
         sync_point.arrive_and_wait();
 
         auto lastQPush = chrono::high_resolution_clock::now();
+        int eventCount = 0;
 
         while (camera->isRunning()) {
             if (const auto raw = camera->getNextEventBatch()) {
@@ -106,21 +108,29 @@ namespace SlamDemo {
                 maskFilter.accept(low);
                 const auto masked = maskFilter.generateEvents();
                 updateAccumulator(resolution, positiveFactor, negativeFactor, ref(masked), ref(accumulator));
+                eventCount += masked.size();
             }
 
             auto now = chrono::high_resolution_clock::now();
-            if (now - lastQPush > sendIntervalMilliseconds * 1ms) {
+            if (now - lastQPush > sendIntervalMilliseconds * 1ms || eventCount > sendEventCount) {
                 //dv::Frame frame = accumulator.generateFrame();
                 //cv::Mat imageDistorted = frame.image;
                 cv::Mat imageDistorted = generateImage(resolution, accumulator);
                 cv::Mat image;
                 cv::undistort(imageDistorted, image, cameraMatrix, distortionCoeffs);
-                //cv::Mat blurred;
-                //cv::blur(image, blurred, cv::Size(3, 3));
-                outgoingImages1.push(image);
+                cv::Mat blurred;
+                cv::blur(image, blurred, cv::Size(3, 3));
+                outgoingImages1.push(blurred);
                 cv::Mat frameToDepth;
-                image.convertTo(frameToDepth, CV_64F);
+                blurred.convertTo(frameToDepth, CV_64F);
                 outgoingImages2.push(frameToDepth);
+
+                accumulator.reserve(resolution.area());
+                for(int i = 0; i < resolution.area(); i++) {
+                    accumulator[i] = 127;
+                }
+
+                eventCount = 0;
 
                 sync_point.arrive_and_wait();
                 lastQPush = now;
@@ -139,6 +149,7 @@ namespace SlamDemo {
         const double positiveFactor,
         const double negativeFactor,
         const int sendIntervalMilliseconds,
+        const int sendEventCount,
         const cv::Matx33f cameraMatrix,
         const vector<float> distortionCoeffs,
         queue<dv::EventStore>& outgoingEvents,
@@ -187,10 +198,10 @@ namespace SlamDemo {
         //accumulator.setIgnorePolarity(false);
         //accumulator.setSynchronousDecay(false);
 
-        vector<double> accumulator;
+        vector<uint8_t> accumulator;
         accumulator.reserve(resolution.area());
         for(int i = 0; i < resolution.area(); i++) {
-            accumulator[i] = 0.5;
+            accumulator[i] = 127;
         }
 
         cout << "Left camera ready!" << endl;
@@ -207,7 +218,7 @@ namespace SlamDemo {
                 maskFilter.accept(low);
                 const auto masked = maskFilter.generateEvents();
                 updateAccumulator(resolution, positiveFactor, negativeFactor, ref(masked), ref(accumulator));
-                eventBuffer.add(*raw);
+                eventBuffer.add(masked);
             }
 
             if (const auto imuBatch = camera->getNextImuBatch()) {
@@ -215,7 +226,7 @@ namespace SlamDemo {
             }
 
             auto now = chrono::high_resolution_clock::now();
-            if (now - lastQPush > sendIntervalMilliseconds * 1ms && imuBuffer.size() > 1 && eventBuffer.size() > 1) {
+            if ((now - lastQPush > sendIntervalMilliseconds * 1ms || eventBuffer.size() > sendEventCount) && imuBuffer.size() > 1 && eventBuffer.size() > 1) {
                 outgoingEvents.push(eventBuffer);
                 eventBuffer = dv::EventStore();
 
@@ -224,14 +235,20 @@ namespace SlamDemo {
                 cv::Mat imageDistorted = generateImage(resolution, accumulator);
                 cv::Mat image;
                 cv::undistort(imageDistorted, image, cameraMatrix, distortionCoeffs);
-                //cv::Mat blurred;
-                //cv::blur(image, blurred, cv::Size(3, 3));
-                outgoingImages1.push(image);
+                cv::Mat blurred;
+                cv::blur(image, blurred, cv::Size(3, 3));
+                outgoingImages1.push(blurred);
                 cv::Mat frameToDepth;
-                image.convertTo(frameToDepth, CV_64F);
+                blurred.convertTo(frameToDepth, CV_64F);
                 outgoingImages2.push(frameToDepth);
+
                 outgoingIMU.push(imuBuffer);
                 imuBuffer.clear();
+
+                accumulator.reserve(resolution.area());
+                for(int i = 0; i < resolution.area(); i++) {
+                    accumulator[i] = 127;
+                }
 
                 sync_point.arrive_and_wait();
                 lastQPush = now;
