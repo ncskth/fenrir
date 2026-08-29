@@ -100,11 +100,30 @@ int main(int argc, char* argv[])
     const cv::Size resolution = leftCameraCalib.resolution;
     cv::Matx33f camMatL = leftCameraCalib.getCameraMatrix();
     vector<float> distCoeffsL = leftCameraCalib.distortion;
+    cv::Mat leftMap1, leftMap2;
 
     // The second camera is assumed to be rightCameraBuffer-side camera
     auto rightCameraCalib = calibration.getCameraCalibration("C1").value();
     cv::Matx33f camMatR = rightCameraCalib.getCameraMatrix();
     vector<float> distCoeffsR = rightCameraCalib.distortion;
+
+    // get rotation and translation from calibration and covert from eigen to opencv
+    auto Reigen = rightCameraCalib.transformationToC0.getRotationMatrix();
+    cv::Mat R;
+    cv::eigen2cv(Reigen, R);
+    auto Teigen = rightCameraCalib.transformationToC0.getTranslation();
+    cv::Mat T;
+    cv::eigen2cv(Teigen, T);
+
+    cv::Mat R1, R2, P1, P2, Q;
+    stereoRectify(camMatL, distCoeffsL, camMatR, distCoeffsR,
+                  resolution, R, T, R1, R2, P1, P2, Q);
+
+    cv::Mat mapL1, mapL2, mapR1, mapR2;
+    initUndistortRectifyMap(camMatL, distCoeffsL, R1, P1,
+                            resolution, CV_32FC1, mapL1, mapL2);
+    initUndistortRectifyMap(camMatR, distCoeffsR, R2, P2,
+                            resolution, CV_32FC1, mapR1, mapR2);
 
     auto imuCalib = calibration.getImuCalibration("S0").value();
     cv::Point3f gyroBias = imuCalib.omegaOffsetAvg;
@@ -139,8 +158,10 @@ int main(int argc, char* argv[])
         eventAccumulatorMilliseconds,
         eventAccumulatorGain,
         readCameraMilliseconds,
-        camMatL,
-        distCoeffsL,
+        //camMatL,
+        //distCoeffsL,
+        mapL1,
+        mapL2,
         ref(leftEventsToMap),
         ref(leftImageToRender),
         ref(leftImageToMap),
@@ -156,8 +177,10 @@ int main(int argc, char* argv[])
         eventAccumulatorMilliseconds,
         eventAccumulatorGain,
         readCameraMilliseconds,
-        camMatR,
-        distCoeffsR,
+        //camMatR,
+        //distCoeffsR,
+        mapR1,
+        mapR2,
         ref(rightImageToRender),
         ref(rightImageToMap)
     );

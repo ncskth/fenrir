@@ -16,8 +16,10 @@ namespace SlamDemo {
         const int accumulatorTimeConstant,
         const double accumulatorGain,
         const int sendIntervalMilliseconds,
-        const cv::Matx33f cameraMatrix,
-        const vector<float> distortionCoeffs,
+        //const cv::Matx33f cameraMatrix,
+        //const vector<float> distortionCoeffs,
+        const cv::Mat undistortRectifyMat1,
+        const cv::Mat undistortRectifyMat2,
         queue<cv::Mat>& outgoingImages1,
         queue<cv::Mat>& outgoingImages2
         ) {
@@ -80,7 +82,8 @@ namespace SlamDemo {
                 dv::Frame frame = accumulator.generateFrame();
                 cv::Mat imageDistorted = frame.image;
                 cv::Mat image;
-                cv::undistort(imageDistorted, image, cameraMatrix, distortionCoeffs);
+                //cv::undistort(imageDistorted, image, cameraMatrix, distortionCoeffs);
+                cv::remap(imageDistorted, image, undistortRectifyMat1, undistortRectifyMat2, cv::INTER_LINEAR);
                 cv::Mat blurred;
                 cv::blur(image, blurred, cv::Size(3, 3));
                 outgoingImages1.push(blurred);
@@ -103,8 +106,10 @@ namespace SlamDemo {
         const int accumulatorTimeConstant,
         const double accumulatorGain,
         const int sendIntervalMilliseconds,
-        const cv::Matx33f cameraMatrix,
-        const vector<float> distortionCoeffs,
+        //const cv::Matx33f cameraMatrix,
+        //const vector<float> distortionCoeffs,
+        const cv::Mat undistortRectifyMat1,
+        const cv::Mat undistortRectifyMat2,
         queue<dv::EventStore>& outgoingEvents,
         queue<cv::Mat>& outgoingImages1,
         queue<cv::Mat>& outgoingImages2,
@@ -180,7 +185,8 @@ namespace SlamDemo {
                 dv::Frame frame = accumulator.generateFrame();
                 cv::Mat imageDistorted = frame.image;
                 cv::Mat image;
-                cv::undistort(imageDistorted, image, cameraMatrix, distortionCoeffs);
+                //cv::undistort(imageDistorted, image, cameraMatrix, distortionCoeffs);
+                cv::remap(imageDistorted, image, undistortRectifyMat1, undistortRectifyMat2, cv::INTER_LINEAR);
                 cv::Mat blurred;
                 cv::blur(image, blurred, cv::Size(3, 3));
                 outgoingImages1.push(blurred);
