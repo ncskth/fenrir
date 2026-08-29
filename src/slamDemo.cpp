@@ -11,6 +11,7 @@
 #include <opencv2/viz.hpp>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
+#include <opencv2/calib3d.hpp>
 
 #include <boost/program_options.hpp>
 
@@ -95,34 +96,55 @@ int main(int argc, char* argv[])
 
     auto calibration = dv::camera::CalibrationSet::LoadFromFile(calibJSONPath);
 
-    // It is expected that calibration file will have "C0" as the leftCameraBuffer camera
+    // Get calibration data
     auto leftCameraCalib = calibration.getCameraCalibration("C0").value();
-    const cv::Size resolution = leftCameraCalib.resolution;
-    cv::Matx33f camMatL = leftCameraCalib.getCameraMatrix();
-    vector<float> distCoeffsL = leftCameraCalib.distortion;
-    cv::Mat leftMap1, leftMap2;
-
-    // The second camera is assumed to be rightCameraBuffer-side camera
     auto rightCameraCalib = calibration.getCameraCalibration("C1").value();
-    cv::Matx33f camMatR = rightCameraCalib.getCameraMatrix();
-    vector<float> distCoeffsR = rightCameraCalib.distortion;
+    const cv::Size resolution = leftCameraCalib.resolution;
 
-    // get rotation and translation from calibration and covert from eigen to opencv
+    // Direct assignment - no element-by-element copying
+    cv::Mat camMatL_mat = cv::Mat(leftCameraCalib.getCameraMatrix());  // CV_32F
+    cv::Mat camMatR_mat = cv::Mat(rightCameraCalib.getCameraMatrix()); // CV_32F
+
+    cv::Mat distCoeffsL_mat = cv::Mat(leftCameraCalib.distortion);     // CV_32F
+    cv::Mat distCoeffsR_mat = cv::Mat(rightCameraCalib.distortion);    // CV_32F
+
     auto Reigen = rightCameraCalib.transformationToC0.getRotationMatrix();
-    cv::Mat R;
-    cv::eigen2cv(Reigen, R);
     auto Teigen = rightCameraCalib.transformationToC0.getTranslation();
-    cv::Mat T;
+    cv::Mat R, T;
+    cv::eigen2cv(Reigen, R);
     cv::eigen2cv(Teigen, T);
 
-    cv::Mat R1, R2, P1, P2, Q;
-    stereoRectify(camMatL, distCoeffsL, camMatR, distCoeffsR,
-                  resolution, R, T, R1, R2, P1, P2, Q);
+    // Convert everything to CV_64F for stereoRectify
+    camMatL_mat.convertTo(camMatL_mat, CV_64F);
+    camMatR_mat.convertTo(camMatR_mat, CV_64F);
+    distCoeffsL_mat.convertTo(distCoeffsL_mat, CV_64F);
+    distCoeffsR_mat.convertTo(distCoeffsR_mat, CV_64F);
+    R.convertTo(R, CV_64F);
+    T.convertTo(T, CV_64F);
 
+    // Stereo rectify (CV_64F)
+    cv::Mat R1, R2, P1, P2, Q;
+    stereoRectify(camMatL_mat, distCoeffsL_mat, camMatR_mat, distCoeffsR_mat,
+                resolution, R, T, R1, R2, P1, P2, Q);
+
+    // Convert back to CV_32F for initUndistortRectifyMap
+    cv::Mat camMatL_32, camMatR_32, distCoeffsL_32, distCoeffsR_32;
+    cv::Mat R1_32, R2_32, P1_32, P2_32;
+
+    camMatL_mat.convertTo(camMatL_32, CV_32F);
+    camMatR_mat.convertTo(camMatR_32, CV_32F);
+    distCoeffsL_mat.convertTo(distCoeffsL_32, CV_32F);
+    distCoeffsR_mat.convertTo(distCoeffsR_32, CV_32F);
+    R1.convertTo(R1_32, CV_32F);
+    R2.convertTo(R2_32, CV_32F);
+    P1.convertTo(P1_32, CV_32F);
+    P2.convertTo(P2_32, CV_32F);
+
+    // Generate maps (CV_32F)
     cv::Mat mapL1, mapL2, mapR1, mapR2;
-    initUndistortRectifyMap(camMatL, distCoeffsL, R1, P1,
+    initUndistortRectifyMap(camMatL_32, distCoeffsL_32, R1_32, P1_32,
                             resolution, CV_32FC1, mapL1, mapL2);
-    initUndistortRectifyMap(camMatR, distCoeffsR, R2, P2,
+    initUndistortRectifyMap(camMatR_32, distCoeffsR_32, R2_32, P2_32,
                             resolution, CV_32FC1, mapR1, mapR2);
 
     auto imuCalib = calibration.getImuCalibration("S0").value();
