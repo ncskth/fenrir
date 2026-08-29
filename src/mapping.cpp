@@ -16,22 +16,24 @@ namespace SlamDemo {
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
-        const int halfBlockSize,
+        const int halfBlockWidth,
+        const int halfBlockHeight,
         const int searchBound,
         const int centerX,
         const int centerY,
         const cv::Mat& combinedTSLeft,
         const cv::Mat& combinedTSRight
     ) {
-        const int blockSize = 2*halfBlockSize + 1;
-        const int blockArea = blockSize*blockSize;
-        const int leftX = centerX - halfBlockSize;
-        const int topY = centerY - halfBlockSize;
+        const int blockWidth = 2*halfBlockWidth + 1;
+        const int blockHeight = 2*halfBlockHeight + 1;
+        const int blockArea = blockWidth*blockHeight;
+        const int leftX = centerX - halfBlockWidth;
+        const int topY = centerY - halfBlockHeight;
 
         // Bounds check
         if (leftX < 0 || topY < 0 ||
-            leftX + blockSize > combinedTSLeft.cols ||
-            topY + blockSize > combinedTSLeft.rows) {
+            leftX + blockWidth > combinedTSLeft.cols ||
+            topY + blockHeight > combinedTSLeft.rows) {
             return {centerX, centerY, -1, 0.};
         }
 
@@ -46,9 +48,9 @@ namespace SlamDemo {
 
         // Compute left mean and variance directly
         double leftSum = 0, leftSumSq = 0;
-        for(int y = 0; y < blockSize; y++) {
+        for(int y = 0; y < blockHeight; y++) {
             const double* row = leftData + y * leftStep;
-            for(int x = 0; x < blockSize; x++) {
+            for(int x = 0; x < blockWidth; x++) {
                 const double val = row[x];
                 leftSum += val;
                 leftSumSq += val * val;
@@ -72,10 +74,10 @@ namespace SlamDemo {
 
         // Compute initial statistics
         double rightSum = 0, rightSumSq = 0, sumXY = 0;
-        for(int y = 0; y < blockSize; y++) {
+        for(int y = 0; y < blockHeight; y++) {
             const double* leftRow = leftData + y * leftStep;
             const double* rightRow = rightData + y * rightStep;
-            for(int x = 0; x < blockSize; x++) {
+            for(int x = 0; x < blockWidth; x++) {
                 const double lv = leftRow[x];
                 const double rv = rightRow[x];
                 rightSum += rv;
@@ -100,9 +102,9 @@ namespace SlamDemo {
 
         // Store last column sums for sliding window
         double lastColSum = 0, lastColSqSum = 0;
-        for(int y = 0; y < blockSize; y++) {
+        for(int y = 0; y < blockHeight; y++) {
             const double* rightRow = rightData + y * rightStep;
-            const double val = rightRow[blockSize - 1];
+            const double val = rightRow[blockWidth - 1];
             lastColSum += val;
             lastColSqSum += val * val;
         }
@@ -110,7 +112,7 @@ namespace SlamDemo {
         // Search disparities
         for(int disparity = 1; disparity <= maxDisparity; disparity++) {
             const int rightX = leftX - disparity;
-            if (rightX < 0 || rightX + blockSize > combinedTSRight.cols) {
+            if (rightX < 0 || rightX + blockWidth > combinedTSRight.cols) {
                 break;
             }
 
@@ -118,7 +120,7 @@ namespace SlamDemo {
 
             // Compute new column sums
             double newColSum = 0, newColSqSum = 0;
-            for(int y = 0; y < blockSize; y++) {
+            for(int y = 0; y < blockHeight; y++) {
                 const double* row = newRightData + y * rightStep;
                 const double val = row[0];
                 newColSum += val;
@@ -132,19 +134,19 @@ namespace SlamDemo {
             // Update last column for next iteration
             lastColSum = 0;
             lastColSqSum = 0;
-            for(int y = 0; y < blockSize; y++) {
+            for(int y = 0; y < blockHeight; y++) {
                 const double* row = newRightData + y * rightStep;
-                const double val = row[blockSize - 1];
+                const double val = row[blockWidth - 1];
                 lastColSum += val;
                 lastColSqSum += val * val;
             }
 
             // Compute covariance for current disparity
             sumXY = 0;
-            for(int y = 0; y < blockSize; y++) {
+            for(int y = 0; y < blockHeight; y++) {
                 const double* leftRow = leftData + y * leftStep;
                 const double* rightRow = newRightData + y * rightStep;
-                for(int x = 0; x < blockSize; x++) {
+                for(int x = 0; x < blockWidth; x++) {
                     sumXY += leftRow[x] * rightRow[x];
                 }
             }
@@ -164,38 +166,12 @@ namespace SlamDemo {
         return {centerX, centerY, pixelDisparity, bestCorrelation};
     }
 
-    void singleBlockSearch(
-        const double minVariance,
-        const double minCorrelation,
-        cv::Scalar& leftVariance,
-        vector<cv::Scalar>& rightVarianceAtDisparity,
-        vector<cv::Scalar>& covarianceAtDisparity,
-        int& match,
-        double& bestCorrelation
-    ) {
-        // -1 for no match
-        match = -1;
-        bestCorrelation = 0.;
-        if(leftVariance[0] < minVariance) {
-            return;
-        }
-
-        for(int disparity = 0; disparity < covarianceAtDisparity.size(); disparity++) {
-            if(rightVarianceAtDisparity[disparity][0] > minVariance) {
-                double corr = covarianceAtDisparity[disparity][0]/(sqrt(leftVariance[0]*rightVarianceAtDisparity[disparity][0]));
-                if(corr > minCorrelation && corr > bestCorrelation) {
-                    match = disparity;
-                    corr = bestCorrelation;
-                }
-            }
-        }
-    }
-
     vector<StereoBlockMatch> stereoBlockMatchingSequential(
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
-        const int halfBlockSize,
+        const int halfBlockWidth,
+        const int halfBlockHeight,
         const int searchBound,
         const cv::Mat& combinedTSLeft,
         const cv::Mat& combinedTSRight,
@@ -213,7 +189,8 @@ namespace SlamDemo {
                 minVariance,
                 minCorrelation,
                 resolution,
-                halfBlockSize,
+                halfBlockWidth,
+                halfBlockHeight,
                 searchBound,
                 xCenters[i],
                 yCenters[i],
@@ -230,7 +207,8 @@ namespace SlamDemo {
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
-        const int halfBlockSize,
+        const int halfBlockWidth,
+        const int halfBlockHeight,
         const int searchBound,
         const cv::Mat& combinedTSLeft,
         const cv::Mat& combinedTSRight,
@@ -253,7 +231,8 @@ namespace SlamDemo {
                     minVariance,
                     minCorrelation,
                     resolution,
-                    halfBlockSize,
+                    halfBlockWidth,
+                    halfBlockHeight,
                     searchBound,
                     combinedTSLeft,
                     combinedTSRight,
@@ -304,7 +283,8 @@ namespace SlamDemo {
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
-        const int halfBlockSize,
+        const int halfBlockWidth,
+        const int halfBlockHeight,
         const int downsampling,
         const int searchBound,
         queue<dv::EventStore>& incomingLeftEvents,
@@ -339,7 +319,8 @@ namespace SlamDemo {
                     minVariance,
                     minCorrelation,
                     resolution,
-                    halfBlockSize,
+                    halfBlockWidth,
+                    halfBlockHeight,
                     searchBound,
                     ref(leftImage),
                     ref(rightImage),

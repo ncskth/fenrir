@@ -16,33 +16,24 @@ namespace SlamDemo {
     };
 
     StereoBlockMatch matchSingleBlock(
+        const double minVariance,
+        const double minCorrelation,
         const cv::Size resolution,
-        const int halfBlockSize,
+        const int halfBlockWidth,
+        const int halfBlockHeight,
         const int searchBound,
         const int centerX,
         const int centerY,
         const cv::Mat& combinedTSLeft,
-        const cv::Mat& combinedTSRight,
-        cv::Scalar& leftVarianceAtBlock,
-        vector<cv::Scalar>& rightVarianceAtDisparity,
-        vector<cv::Scalar>& covarianceAtDisparity
-    );
-
-    void singleBlockSearch(
-        const double minVariance,
-        const double minCorrelation,
-        cv::Scalar& leftVarianceAtBlock,
-        vector<cv::Scalar>& rightVarianceAtDisparity,
-        vector<cv::Scalar>& covarianceAtDisparity,
-        int& match,
-        double& bestCorrelation
+        const cv::Mat& combinedTSRight
     );
 
     vector<StereoBlockMatch> stereoBlockMatchingSequential(
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
-        const int halfBlockSize,
+        const int halfBlockWidth,
+        const int halfBlockHeight,
         const int searchBound,
         const cv::Mat& combinedTSLeft,
         const cv::Mat& combinedTSRight,
@@ -57,17 +48,13 @@ namespace SlamDemo {
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
-        const int halfBlockSize,
+        const int halfBlockWidth,
+        const int halfBlockHeight,
         const int searchBound,
         const cv::Mat& combinedTSLeft,
         const cv::Mat& combinedTSRight,
         const vector<int>& xCenters,
-        const vector<int>& yCenters,
-        vector<cv::Scalar>& leftVariances,
-        vector<vector<cv::Scalar>>& rightVariances,
-        vector<vector<cv::Scalar>>& covariances,
-        vector<int>& matches,
-        vector<double>& correlations
+        const vector<int>& yCenters
     );
 
     cv::Mat drawBlockMatchingResult(
@@ -81,7 +68,8 @@ namespace SlamDemo {
         const double minVariance,
         const double minCorrelation,
         const cv::Size resolution,
-        const int halfBlockSize,
+        const int halfBlockWidth,
+        const int halfBlockHeight,
         const int downsampling,
         const int searchBound,
         queue<dv::EventStore>& incomingLeftEvents,

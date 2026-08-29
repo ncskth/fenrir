@@ -48,7 +48,8 @@ int main(int argc, char* argv[])
     double minBlockVariance;
     double minBlockCorrelation;
     int sbmEventDownsampling;
-    int sbmHalfBlockSize;
+    int sbmHalfBlockWidth;
+    int sbmHalfBlockHeight;
     int sbmNumThreads;
     int sbmSearchBound;
 
@@ -63,10 +64,11 @@ int main(int argc, char* argv[])
         ("event-accumulator-gain", po::value<double>(&eventAccumulatorGain)->default_value(0.15), "Contribution of individual events to the accumulator")
         ("aa-patches-x", po::value<int>(&aaSurfacePatchesX)->default_value(4), "How many grid patches for adaptive accumulation, x axis")
         ("aa-patches-y", po::value<int>(&aaSurfacePatchesY)->default_value(3), "How many grid patches for adaptive accumulation, y axis")
-        ("min-block-variance", po::value<double>(&minBlockVariance)->default_value(100.), "Minimum variance that a time surface patch must possess to be matched.")
-        ("min-block-correlation", po::value<double>(&minBlockCorrelation)->default_value(.9), "Minimum correlation between two matched blocks in stereo block matching.")
+        ("sbm-min-variance", po::value<double>(&minBlockVariance)->default_value(50.), "Minimum variance that a time surface patch must possess to be matched.")
+        ("sbm-min-correlation", po::value<double>(&minBlockCorrelation)->default_value(.9), "Minimum correlation between two matched blocks in stereo block matching.")
         ("sbm-event-downsampling", po::value<int>(&sbmEventDownsampling)->default_value(100), "Rate at which we downsample events to get blocks for SBM")
-        ("sbm-half-blocksize", po::value<int>(&sbmHalfBlockSize)->default_value(12), "Block side length used in SBM minus 1 divided by two.")
+        ("sbm-half-block-width", po::value<int>(&sbmHalfBlockWidth)->default_value(24), "Block width used in SBM minus 1 divided by two.")
+        ("sbm-half-block-height", po::value<int>(&sbmHalfBlockHeight)->default_value(6), "Block height used in SBM minus 1 divided by two.")
         ("sbm-num-threads", po::value<int>(&sbmNumThreads)->default_value(1), "Number of threads used for SBM.")
         ("sbm-search-bound", po::value<int>(&sbmSearchBound)->default_value(100), "Matching a block from the left camera will check at most this many blocks from the right camera.");
 
@@ -86,7 +88,8 @@ int main(int argc, char* argv[])
     cout << "SBM minimum block variance: " << minBlockVariance << endl;
     cout << "SBM minimum block correlation: " << minBlockCorrelation << endl;
     cout << "SBM downsampling rate of events to obtain block centers: " << sbmEventDownsampling << endl;
-    cout << "SBM half block size: " << sbmHalfBlockSize << endl;
+    cout << "SBM half block width: " << sbmHalfBlockWidth << endl;
+    cout << "SBM half block height: " << sbmHalfBlockHeight << endl;
     cout << "SBM number of threads: " << sbmNumThreads << endl;
     cout << "SBM search bound: " << sbmSearchBound << endl;
 
@@ -194,7 +197,8 @@ int main(int argc, char* argv[])
         minBlockVariance,
         minBlockCorrelation,
         resolution,
-        sbmHalfBlockSize,
+        sbmHalfBlockWidth,
+        sbmHalfBlockHeight,
         sbmEventDownsampling,
         sbmSearchBound,
         ref(leftEventsToMap),
