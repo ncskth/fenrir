@@ -3,7 +3,7 @@
     "cameras": {
         "C0": {
             "name": "DXM00034",
-            "position": "left",
+            "position": "right",
             "master": "true",
             "resolution": [
                 "640",
@@ -62,7 +62,7 @@
         },
         "C1": {
             "name": "DXM00019",
-            "position": "right",
+            "position": "left",
             "master": "false",
             "resolution": [
                 "640",
@@ -122,7 +122,7 @@
     },
     "imus": {
         "S0": {
-            "name": "DVXM0019",
+            "name": "DVXM0034",
             "omegaMax": "100",
             "accMax": "98.0999985",
             "omegaOffsetAvg": [

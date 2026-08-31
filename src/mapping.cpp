@@ -264,7 +264,11 @@ namespace SlamDemo {
         cv::Mat visBGR;
         for(auto match : sbmResult) {
             if(match.pixelDisparity > -1) {
-                uint8_t hue = (uint8_t)(120.*match.pixelDisparity/searchBound);
+                double d = (double)match.pixelDisparity;
+                uint8_t hue = (uint8_t)(120.*d/searchBound);
+                //if(hue > 120) {
+                //    cout << "hue: " << (int)hue << endl;
+                //}
                 uint8_t val = 255;//(uint8_t)(255.*sbmResult.correlation[i]);
                 for(int i = match.x - 1; i < match.x + 2; i++) {
                     for(int j = match.y - 1; j < match.y + 2; j++) {

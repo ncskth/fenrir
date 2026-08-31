@@ -32,6 +32,68 @@ using namespace SlamDemo;
 using namespace std::chrono_literals;
 using namespace std;
 
+cv::Mat drawDepthColorKey(const cv::Mat& Q, int sbmSearchBound) {
+    // Get focal length and baseline from Q
+    double f = Q.at<double>(2, 3);
+    double Tx = -1.0 / Q.at<double>(3, 2);
+
+    // Create key image (vertical color bar)
+    int height = 400;
+    int width = 200;
+    cv::Mat key = cv::Mat::zeros(height, width, CV_8UC3);
+
+    // Fill color bar
+    for(int y = height - 1; y >= 0; y--) {
+        // Normalized disparity from 0 to sbmSearchBound
+        float disp = 1.0 - (float)(height - y - 1) / height;
+
+        // Hue from 0 to 120 (red to green in HSV)
+        uint8_t hue = (uint8_t)(120.0f * disp);
+        //cout << "hue: " << (int)hue << endl;
+
+        // HSV to BGR
+        cv::Mat hsv(1, 1, CV_8UC3);
+        hsv.at<cv::Vec3b>(0,0) = cv::Vec3b(hue, 255, 255); // OpenCV HSV: H/2
+        cv::Mat bgr;
+        cv::cvtColor(hsv, bgr, cv::COLOR_HSV2BGR);
+
+        // Fill row
+        for(int x = 0; x < width/2; x++) {
+            key.at<cv::Vec3b>(y, x) = bgr.at<cv::Vec3b>(0,0);
+        }
+    }
+
+    // Add ticks and labels
+    int numTicks = 5;
+    for(int i = numTicks - 1; i >= 0; i--) {
+        // Disparity from 2 to sbmSearchBound
+        float disp = 10.0f + (float)i / (numTicks - 1) * (sbmSearchBound - 20);
+        float depth = f * Tx / disp;
+
+        int y = (int)((disp / sbmSearchBound) * height);
+        if(y < 0) y = 0;
+        if(y >= height) y = height - 1;
+
+        // Draw tick mark
+        cv::line(key, cv::Point(width - 10, y), cv::Point(width, y), cv::Scalar(255,255,255), 2);
+
+        // Draw label
+        std::string label = cv::format("%.2f m", depth);
+        cv::putText(key, label, cv::Point(100, y+5), cv::FONT_HERSHEY_SIMPLEX,
+                    0.4, cv::Scalar(255,255,255), 1);
+    }
+
+    // Add title
+    //cv::putText(key, "Depth", cv::Point(20, 20), cv::FONT_HERSHEY_SIMPLEX,
+    //            0.6, cv::Scalar(255,255,255), 1);
+    cv::putText(key, "Near", cv::Point(20, height-10), cv::FONT_HERSHEY_SIMPLEX,
+                0.6, cv::Scalar(200,200,200), 1);
+    cv::putText(key, "Far", cv::Point(20, 20), cv::FONT_HERSHEY_SIMPLEX,
+                0.6, cv::Scalar(200,200,200), 1);
+
+    return key;
+}
+
 int main(int argc, char* argv[])
 {
 
@@ -156,6 +218,9 @@ int main(int argc, char* argv[])
     cv::namedWindow("Right", cv::WINDOW_NORMAL);
     cv::namedWindow("Trajectory", cv::WINDOW_NORMAL);
     cv::namedWindow("Depth", cv::WINDOW_NORMAL);
+
+    cv::Mat depthColorKey = drawDepthColorKey(ref(Q), sbmSearchBound);
+    cv::imshow("Depth", depthColorKey);
 
     //queue<dv::EventStore> leftCameraToImage;
     queue<dv::EventStore> leftEventsToMap;
