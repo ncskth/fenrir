@@ -38,7 +38,7 @@ cv::Mat drawDepthColorKey(const cv::Mat& Q, int sbmSearchBound) {
     double Tx = -1.0 / Q.at<double>(3, 2);
 
     // Create key image (vertical color bar)
-    int height = 400;
+    int height = 480;
     int width = 200;
     cv::Mat key = cv::Mat::zeros(height, width, CV_8UC3);
 
@@ -49,7 +49,6 @@ cv::Mat drawDepthColorKey(const cv::Mat& Q, int sbmSearchBound) {
 
         // Hue from 0 to 120 (red to green in HSV)
         uint8_t hue = (uint8_t)(120.0f * disp);
-        //cout << "hue: " << (int)hue << endl;
 
         // HSV to BGR
         cv::Mat hsv(1, 1, CV_8UC3);
@@ -57,7 +56,7 @@ cv::Mat drawDepthColorKey(const cv::Mat& Q, int sbmSearchBound) {
         cv::Mat bgr;
         cv::cvtColor(hsv, bgr, cv::COLOR_HSV2BGR);
 
-        // Fill row
+        // Fill half of the row
         for(int x = 0; x < width/2; x++) {
             key.at<cv::Vec3b>(y, x) = bgr.at<cv::Vec3b>(0,0);
         }
@@ -220,11 +219,8 @@ int main(int argc, char* argv[])
     cv::namedWindow("Depth", cv::WINDOW_NORMAL);
 
     cv::Mat depthColorKey = drawDepthColorKey(ref(Q), sbmSearchBound);
-    cv::imshow("Depth", depthColorKey);
 
-    //queue<dv::EventStore> leftCameraToImage;
     queue<dv::EventStore> leftEventsToMap;
-    //queue<dv::EventStore> rightCameraToImage;
     queue<vector<dv::IMU>> imuQueue;
     queue<cv::Mat> velocityVisQueue;
     queue<cv::Mat> leftImageToRender;
@@ -326,24 +322,12 @@ int main(int argc, char* argv[])
             rightImageToRender.pop();
             auto depthImage = depthImageQueue.front();
             depthImageQueue.pop();
-            cv::Mat leftImageBGR;
-            cv::cvtColor(leftImage, leftImageBGR, cv::COLOR_GRAY2BGR);
-            cv::Mat leftDepthDisplay = leftImageBGR.clone();
-            depthImage.copyTo(leftDepthDisplay, depthImage != 0);
-            /*
-            cv::Mat rightImage;
-            cv::vconcat(rightImageToRender.front()[0], rightImageToRender.front()[1], rightImage);
-            rightImageToRender.pop();
-            auto leftqFront = leftImageToRender.front();
-            leftImageToRender.pop();
+            cv::Mat depthImageKey;
+            cv::hconcat(depthImage, depthColorKey, depthImageKey);
 
-            cv::Mat leftImage;
-            cv::vconcat(get<0>(leftqFront)[0], get<0>(leftqFront)[1], leftImage);
-            cv::vconcat(leftImage, get<0>(leftqFront)[2], leftImage);
-            */
-
-            cv::imshow("Left", leftDepthDisplay);
+            cv::imshow("Left", leftImage);
             cv::imshow("Right", rightImage);
+            cv::imshow("Depth", depthImageKey);
         }
         //if (!velocityVisQueue.empty()) {
         //    cv::Mat trajectoryVisualization = velocityVisQueue.front();
