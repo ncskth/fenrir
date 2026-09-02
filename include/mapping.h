@@ -43,7 +43,7 @@ namespace SlamDemo {
         const int end
     );
 
-    vector<StereoBlockMatch> stereoBlockMatchingParallel(
+    vector<vector<StereoBlockMatch>> stereoBlockMatchingParallel(
         const int numThreads,
         const double minVariance,
         const double minCorrelation,
