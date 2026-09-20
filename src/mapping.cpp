@@ -5,11 +5,42 @@ namespace SlamDemo
     using namespace std::chrono_literals;
     using namespace std;
 
-    bool isHorizontalEdge(const cv::Mat &img, const int y, const int x)
+    tuple<cv::Mat, cv::Mat> edgeKernels(int width) {
+        double sigma = width / 2.0;
+        double s2 = sigma * sigma;
+        double center = (width - 1) / 2.0;
+        cv::Mat kernelx(width, width, CV_64FC1);
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < width; j++) {
+                double x = i - center;
+                double y = j - center;
+                kernelx.at<double>(i, j) = -x * exp(-0.5 * (x*x + y*y) / s2) / s2;
+            }
+        }
+        cv::Mat kernely;
+        cv::transpose(kernelx, kernely);
+        //cout << "KERNELS INITIALIZED!" << endl;
+        return {kernelx, kernely};
+    }
+
+    bool isHorizontalEdge(const cv::Mat &img,
+                          const cv::Mat &kernelx,
+                          const cv::Mat &kernely,
+                          int y, int x)   // y = row, x = col
     {
-        double dy = (img.at<double>(x + 1, y) + 0.5 * (img.at<double>(x + 1, y + 1) + img.at<double>(x + 1, y + 1))) - (img.at<double>(x - 1, y) + 0.5 * (img.at<double>(x - 1, y + 1) + img.at<double>(x - 1, y + 1)));
-        double dx = (img.at<double>(x, y + 1) + 0.5 * (img.at<double>(x + 1, y + 1) + img.at<double>(x - 1, y + 1))) - (img.at<double>(x, y - 1) + 0.5 * (img.at<double>(x + 1, y - 1) + img.at<double>(x - 1, y - 1)));
-        return abs(dx) < 0.5 * abs(dy);
+        double dx = 0.0, dy = 0.0;
+        int w2 = (kernelx.rows - 1) / 2;
+        for (int i = 0; i < kernelx.rows; i++) {
+            for (int j = 0; j < kernelx.cols; j++) {
+                int row = y + i - w2;
+                int col = x + j - w2;
+                double v = img.at<double>(col, row);
+                dx += kernelx.at<double>(i, j) * v;
+                dy += kernely.at<double>(i, j) * v;
+            }
+        }
+        // Horizontal edge => gradient mostly vertical => |dy| >> |dx|
+        return abs(dy) > 4.0 * abs(dx);
     }
 
     StereoBlockMatch matchSingleBlock(
@@ -21,6 +52,8 @@ namespace SlamDemo
         const int searchBound,
         const int centerX,
         const int centerY,
+        const cv::Mat &kernelx,
+        const cv::Mat &kernely,
         const cv::Mat &combinedTSLeft,
         const cv::Mat &combinedTSRight)
     {
@@ -39,7 +72,7 @@ namespace SlamDemo
         }
 
         // If the local neighborhood is a horizontal edge, stereo block matching will be unreliable
-        if (isHorizontalEdge(combinedTSLeft, centerX, centerY))
+        if (isHorizontalEdge(combinedTSLeft, kernelx, kernely, centerX, centerY))
         {
             return {centerX, centerY, -1, 0.};
         }
@@ -192,6 +225,8 @@ namespace SlamDemo
         const int halfBlockWidth,
         const int halfBlockHeight,
         const int searchBound,
+        const cv::Mat &kernelx,
+        const cv::Mat &kernely,
         const cv::Mat &combinedTSLeft,
         const cv::Mat &combinedTSRight,
         const vector<int> &xCenters,
@@ -214,6 +249,8 @@ namespace SlamDemo
                 searchBound,
                 xCenters[i],
                 yCenters[i],
+                kernelx,
+                kernely,
                 combinedTSLeft,
                 combinedTSRight));
         }
@@ -229,6 +266,8 @@ namespace SlamDemo
         const int halfBlockWidth,
         const int halfBlockHeight,
         const int searchBound,
+        const cv::Mat &kernelx,
+        const cv::Mat &kernely,
         const cv::Mat &combinedTSLeft,
         const cv::Mat &combinedTSRight,
         const vector<int> &xCenters,
@@ -254,6 +293,8 @@ namespace SlamDemo
                                           halfBlockWidth,
                                           halfBlockHeight,
                                           searchBound,
+                                          kernelx,
+                                          kernely,
                                           combinedTSLeft,
                                           combinedTSRight,
                                           xCenters,
@@ -323,6 +364,10 @@ namespace SlamDemo
         queue<cv::Mat> &incomingRightImages,
         queue<cv::Mat> &outgoingImages)
     {
+        auto kernels = edgeKernels(min(2*halfBlockWidth, 2*halfBlockHeight));
+        cv::Mat kernelx = get<0>(kernels);
+        cv::Mat kernely = get<1>(kernels);
+
         while (true)
         {
             if (!incomingLeftImages.empty() && !incomingRightImages.empty() && !incomingLeftEvents.empty())
@@ -352,6 +397,8 @@ namespace SlamDemo
                     halfBlockWidth,
                     halfBlockHeight,
                     searchBound,
+                    ref(kernelx),
+                    ref(kernely),
                     ref(leftImage),
                     ref(rightImage),
                     ref(xCenters),

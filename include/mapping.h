@@ -15,6 +15,13 @@ namespace SlamDemo {
         double correlation;
     };
 
+    tuple<cv::Mat, cv::Mat> edgeKernels(int width);
+
+    bool isHorizontalEdge(const cv::Mat &img,
+                              const cv::Mat &kernelx,
+                              const cv::Mat &kernely,
+                              int y, int x);
+
     StereoBlockMatch matchSingleBlock(
         const double minVariance,
         const double minCorrelation,
@@ -24,8 +31,10 @@ namespace SlamDemo {
         const int searchBound,
         const int centerX,
         const int centerY,
-        const cv::Mat& combinedTSLeft,
-        const cv::Mat& combinedTSRight
+        const cv::Mat &kernelx,
+        const cv::Mat &kernely,
+        const cv::Mat &combinedTSLeft,
+        const cv::Mat &combinedTSRight
     );
 
     vector<StereoBlockMatch> stereoBlockMatchingSequential(
@@ -35,10 +44,12 @@ namespace SlamDemo {
         const int halfBlockWidth,
         const int halfBlockHeight,
         const int searchBound,
-        const cv::Mat& combinedTSLeft,
-        const cv::Mat& combinedTSRight,
-        const vector<int>& xCenters,
-        const vector<int>& yCenters,
+        const cv::Mat &kernelx,
+        const cv::Mat &kernely,
+        const cv::Mat &combinedTSLeft,
+        const cv::Mat &combinedTSRight,
+        const vector<int> &xCenters,
+        const vector<int> &yCenters,
         const int start,
         const int end
     );
@@ -51,16 +62,18 @@ namespace SlamDemo {
         const int halfBlockWidth,
         const int halfBlockHeight,
         const int searchBound,
-        const cv::Mat& combinedTSLeft,
-        const cv::Mat& combinedTSRight,
-        const vector<int>& xCenters,
-        const vector<int>& yCenters
+        const cv::Mat &kernelx,
+        const cv::Mat &kernely,
+        const cv::Mat &combinedTSLeft,
+        const cv::Mat &combinedTSRight,
+        const vector<int> &xCenters,
+        const vector<int> &yCenters
     );
 
     cv::Mat drawBlockMatchingResult(
         const cv::Size resolution,
         const int searchBound,
-        const vector<StereoBlockMatch>& sbmResult
+        const vector<vector<StereoBlockMatch>> &sbmResult
     );
 
     void depthEstimationLoop(
@@ -72,9 +85,9 @@ namespace SlamDemo {
         const int halfBlockHeight,
         const int downsampling,
         const int searchBound,
-        queue<dv::EventStore>& incomingLeftEvents,
-        queue<cv::Mat>& incomingLeftImages,
-        queue<cv::Mat>& incomingRightImages,
-        queue<cv::Mat>& outgoingImages
+        queue<dv::EventStore> &incomingLeftEvents,
+        queue<cv::Mat> &incomingLeftImages,
+        queue<cv::Mat> &incomingRightImages,
+        queue<cv::Mat> &outgoingImages
     );
 }
