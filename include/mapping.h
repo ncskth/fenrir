@@ -21,6 +21,10 @@ namespace SlamDemo {
                               const cv::Mat &kernelx,
                               const cv::Mat &kernely,
                               int y, int x);
+    void drawSingleMatch(
+        const int searchBound,
+        const StereoBlockMatch& match,
+        cv::Mat& imageHSV);
 
     StereoBlockMatch matchSingleBlock(
         const double minVariance,
@@ -34,7 +38,8 @@ namespace SlamDemo {
         const cv::Mat &kernelx,
         const cv::Mat &kernely,
         const cv::Mat &combinedTSLeft,
-        const cv::Mat &combinedTSRight
+        const cv::Mat &combinedTSRight,
+        cv::Mat& imgHSV
     );
 
     vector<StereoBlockMatch> stereoBlockMatchingSequential(
@@ -51,7 +56,8 @@ namespace SlamDemo {
         const vector<int> &xCenters,
         const vector<int> &yCenters,
         const int start,
-        const int end
+        const int end,
+        cv::Mat& imgHSV
     );
 
     vector<vector<StereoBlockMatch>> stereoBlockMatchingParallel(
@@ -67,7 +73,8 @@ namespace SlamDemo {
         const cv::Mat &combinedTSLeft,
         const cv::Mat &combinedTSRight,
         const vector<int> &xCenters,
-        const vector<int> &yCenters
+        const vector<int> &yCenters,
+        cv::Mat& imgHSV
     );
 
     cv::Mat drawBlockMatchingResult(
@@ -85,9 +92,9 @@ namespace SlamDemo {
         const int halfBlockHeight,
         const int downsampling,
         const int searchBound,
-        queue<dv::EventStore> &incomingLeftEvents,
-        queue<cv::Mat> &incomingLeftImages,
-        queue<cv::Mat> &incomingRightImages,
+        queue<vector<dv::Event>> &incomingLeftEvents,
+        cv::Mat &leftImage,
+        cv::Mat &rightImage,
         queue<cv::Mat> &outgoingImages
     );
 }

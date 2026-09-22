@@ -18,6 +18,17 @@
 namespace SlamDemo {
     using namespace std;
 
+    void updateImageAndTimestamps(
+        const double decay,
+        const double gain,
+        const int width,
+        const cv::Mat undistortRectifyMap1,
+        const cv::Mat undistortRectifyMap2,
+        const dv::EventStore& events,
+        cv::Mat& image,
+        vector<int64_t>& timestamps
+    );
+
     void rightCameraCapture(
         const cv::Size resolution,
         const string serial,
@@ -27,12 +38,10 @@ namespace SlamDemo {
         const int accumulatorTimeConstant,
         const double accumulatorGain,
         const int sendIntervalMilliseconds,
-        //const cv::Matx33f cameraMatrix,
-        //const vector<float> distortionCoeffs,
         const cv::Mat undistortRectifyMat1,
         const cv::Mat undistortRectifyMat2,
-        queue<cv::Mat>& outgoingImages1,
-        queue<cv::Mat>& outgoingImages2
+        cv::Mat& image,
+        vector<int64_t>& timestamps
     );
 
     void leftCameraCapture(
@@ -44,13 +53,12 @@ namespace SlamDemo {
         const int accumulatorTimeConstant,
         const double accumulatorGain,
         const int sendIntervalMilliseconds,
-        //const cv::Matx33f cameraMatrix,
-        //const vector<float> distortionCoeffs,
+        const int maxEventsInBuffer,
         const cv::Mat undistortRectifyMat1,
         const cv::Mat undistortRectifyMat2,
-        queue<dv::EventStore>& outgoingEvents,
-        queue<cv::Mat>& outgoingImages1,
-        queue<cv::Mat>& outgoingImages2,
+        queue<vector<dv::Event>>& outgoingEvents,
+        cv::Mat& image,
+        vector<int64_t>& timestamps,
         queue<vector<dv::IMU>>& outgoingIMU
     );
 }

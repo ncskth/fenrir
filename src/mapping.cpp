@@ -43,6 +43,29 @@ namespace SlamDemo
         return abs(dy) > 4.0 * abs(dx);
     }
 
+    void drawSingleMatch(
+        const int searchBound,
+        const StereoBlockMatch& match,
+        cv::Mat& imageHSV)
+    {
+        if (match.pixelDisparity > -1) {
+            double d = (double)match.pixelDisparity;
+            uint8_t hue = (uint8_t)(120. * d / searchBound);
+            if (hue > 120)
+            {
+                cout << "hue: " << (int)hue << endl;
+            }
+            uint8_t val = 255; //(uint8_t)(255.*sbmResult.correlation[i]);
+            for (int i = match.x - 1; i < match.x + 2; i++)
+            {
+                for (int j = match.y - 1; j < match.y + 2; j++)
+                {
+                    imageHSV.at<cv::Vec3b>(j, i) = cv::Vec3b(hue, 255, val);
+                }
+            }
+        }
+    }
+
     StereoBlockMatch matchSingleBlock(
         const double minVariance,
         const double minCorrelation,
@@ -55,7 +78,8 @@ namespace SlamDemo
         const cv::Mat &kernelx,
         const cv::Mat &kernely,
         const cv::Mat &combinedTSLeft,
-        const cv::Mat &combinedTSRight)
+        const cv::Mat &combinedTSRight,
+        cv::Mat& imageHSV)
     {
         const int blockWidth = 2 * halfBlockWidth + 1;
         const int blockHeight = 2 * halfBlockHeight + 1;
@@ -215,7 +239,11 @@ namespace SlamDemo
             }
         }
 
-        return {centerX, centerY, pixelDisparity, bestCorrelation};
+        StereoBlockMatch result = {centerX, centerY, pixelDisparity, bestCorrelation};
+
+        drawSingleMatch(searchBound, result, imageHSV);
+
+        return result;
     }
 
     vector<StereoBlockMatch> stereoBlockMatchingSequential(
@@ -232,7 +260,8 @@ namespace SlamDemo
         const vector<int> &xCenters,
         const vector<int> &yCenters,
         const int start,
-        const int end)
+        const int end,
+        cv::Mat &imageHSV)
     {
         int numBlocks = end - start;
         vector<StereoBlockMatch> matches;
@@ -252,7 +281,8 @@ namespace SlamDemo
                 kernelx,
                 kernely,
                 combinedTSLeft,
-                combinedTSRight));
+                combinedTSRight,
+                imageHSV));
         }
 
         return matches;
@@ -271,7 +301,8 @@ namespace SlamDemo
         const cv::Mat &combinedTSLeft,
         const cv::Mat &combinedTSRight,
         const vector<int> &xCenters,
-        const vector<int> &yCenters)
+        const vector<int> &yCenters,
+        cv::Mat &imageHSV)
     {
         size_t numBlocks = xCenters.size();
         vector<vector<StereoBlockMatch>> matches;
@@ -300,7 +331,8 @@ namespace SlamDemo
                                           xCenters,
                                           yCenters,
                                           start,
-                                          end); }));
+                                          end,
+                                          imageHSV); }));
         }
 
         for (int i = 0; i < numThreads; i++)
@@ -359,9 +391,9 @@ namespace SlamDemo
         const int halfBlockHeight,
         const int downsampling,
         const int searchBound,
-        queue<dv::EventStore> &incomingLeftEvents,
-        queue<cv::Mat> &incomingLeftImages,
-        queue<cv::Mat> &incomingRightImages,
+        queue<vector<dv::Event>> &incomingLeftEvents,
+        cv::Mat &leftImage,
+        cv::Mat &rightImage,
         queue<cv::Mat> &outgoingImages)
     {
         auto kernels = edgeKernels(min(2*halfBlockWidth, 2*halfBlockHeight));
@@ -370,24 +402,23 @@ namespace SlamDemo
 
         while (true)
         {
-            if (!incomingLeftImages.empty() && !incomingRightImages.empty() && !incomingLeftEvents.empty())
+            if (!incomingLeftEvents.empty())
             {
-                dv::EventStore events = incomingLeftEvents.front();
+                vector<dv::Event> events = incomingLeftEvents.front();
                 incomingLeftEvents.pop();
-                cv::Mat leftImage = incomingLeftImages.front();
-                incomingLeftImages.pop();
-                cv::Mat rightImage = incomingRightImages.front();
-                incomingRightImages.pop();
 
                 vector<int> xCenters, yCenters;
-                xCenters.reserve(events.size() / downsampling);
-                yCenters.reserve(events.size() / downsampling);
-                for (int i = 0; i < events.size(); i += downsampling)
+                xCenters.reserve(events.size());
+                yCenters.reserve(events.size());
+                for (int i = 0; i < events.size(); i++)
                 {
                     auto ev = events[i];
                     xCenters.push_back(ev.x());
                     yCenters.push_back(ev.y());
                 }
+
+                cv::Mat visHSV = cv::Mat::zeros(resolution, CV_8UC3);
+                cv::Mat visBGR;
 
                 vector<vector<StereoBlockMatch>> matchResult = stereoBlockMatchingParallel(
                     numThreads,
@@ -402,11 +433,13 @@ namespace SlamDemo
                     ref(leftImage),
                     ref(rightImage),
                     ref(xCenters),
-                    ref(yCenters));
+                    ref(yCenters),
+                    ref(visHSV));
 
-                cv::Mat vis = drawBlockMatchingResult(resolution, searchBound, matchResult);
+                //cv::Mat vis = drawBlockMatchingResult(resolution, searchBound, matchResult);
+                cv::cvtColor(visHSV, visBGR, cv::COLOR_HSV2BGR);
 
-                outgoingImages.push(vis);
+                outgoingImages.push(visBGR);
             }
             else
             {
