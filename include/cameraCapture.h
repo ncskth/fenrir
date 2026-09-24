@@ -22,8 +22,8 @@ namespace SlamDemo {
         const double decay,
         const double gain,
         const int width,
-        const cv::Mat undistortRectifyMap1,
-        const cv::Mat undistortRectifyMap2,
+        const cv::Mat& undistortRectifyMap1,
+        const cv::Mat& undistortRectifyMap2,
         const dv::EventStore& events,
         cv::Mat& image,
         vector<int64_t>& timestamps
@@ -56,7 +56,7 @@ namespace SlamDemo {
         const int maxEventsInBuffer,
         const cv::Mat undistortRectifyMat1,
         const cv::Mat undistortRectifyMat2,
-        queue<vector<dv::Event>>& outgoingEvents,
+        queue<vector<tuple<int, int>>>& outgoingEvents,
         cv::Mat& image,
         vector<int64_t>& timestamps,
         queue<vector<dv::IMU>>& outgoingIMU

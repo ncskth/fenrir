@@ -223,7 +223,7 @@ int main(int argc, char* argv[])
 
     cv::Mat depthColorKey = drawDepthColorKey(ref(Q), sbmSearchBound);
 
-    queue<vector<dv::Event>> leftEventsToMap;
+    queue<vector<tuple<int, int>>> leftEventsToMap;
     queue<vector<dv::IMU>> imuQueue;
     queue<cv::Mat> velocityVisQueue;
     //queue<cv::Mat> leftImageToRender;

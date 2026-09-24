@@ -257,8 +257,7 @@ namespace SlamDemo
         const cv::Mat &kernely,
         const cv::Mat &combinedTSLeft,
         const cv::Mat &combinedTSRight,
-        const vector<int> &xCenters,
-        const vector<int> &yCenters,
+        const vector<tuple<int, int>> &centers,
         const int start,
         const int end,
         cv::Mat &imageHSV)
@@ -276,8 +275,8 @@ namespace SlamDemo
                 halfBlockWidth,
                 halfBlockHeight,
                 searchBound,
-                xCenters[i],
-                yCenters[i],
+                get<0>(centers[i]),
+                get<1>(centers[i]),
                 kernelx,
                 kernely,
                 combinedTSLeft,
@@ -300,11 +299,10 @@ namespace SlamDemo
         const cv::Mat &kernely,
         const cv::Mat &combinedTSLeft,
         const cv::Mat &combinedTSRight,
-        const vector<int> &xCenters,
-        const vector<int> &yCenters,
+        const vector<tuple<int, int>> &centers,
         cv::Mat &imageHSV)
     {
-        size_t numBlocks = xCenters.size();
+        size_t numBlocks = centers.size();
         vector<vector<StereoBlockMatch>> matches;
         matches.reserve(numThreads);
         vector<future<vector<StereoBlockMatch>>> futures;
@@ -328,8 +326,7 @@ namespace SlamDemo
                                           kernely,
                                           combinedTSLeft,
                                           combinedTSRight,
-                                          xCenters,
-                                          yCenters,
+                                          centers,
                                           start,
                                           end,
                                           imageHSV); }));
@@ -391,7 +388,7 @@ namespace SlamDemo
         const int halfBlockHeight,
         const int downsampling,
         const int searchBound,
-        queue<vector<dv::Event>> &incomingLeftEvents,
+        queue<vector<tuple<int, int>>> &incomingLeftEvents,
         cv::Mat &leftImage,
         cv::Mat &rightImage,
         queue<cv::Mat> &outgoingImages)
@@ -404,18 +401,8 @@ namespace SlamDemo
         {
             if (!incomingLeftEvents.empty())
             {
-                vector<dv::Event> events = incomingLeftEvents.front();
+                vector<tuple<int, int>> centers = incomingLeftEvents.front();
                 incomingLeftEvents.pop();
-
-                vector<int> xCenters, yCenters;
-                xCenters.reserve(events.size());
-                yCenters.reserve(events.size());
-                for (int i = 0; i < events.size(); i++)
-                {
-                    auto ev = events[i];
-                    xCenters.push_back(ev.x());
-                    yCenters.push_back(ev.y());
-                }
 
                 cv::Mat visHSV = cv::Mat::zeros(resolution, CV_8UC3);
                 cv::Mat visBGR;
@@ -432,8 +419,7 @@ namespace SlamDemo
                     ref(kernely),
                     ref(leftImage),
                     ref(rightImage),
-                    ref(xCenters),
-                    ref(yCenters),
+                    ref(centers),
                     ref(visHSV));
 
                 //cv::Mat vis = drawBlockMatchingResult(resolution, searchBound, matchResult);

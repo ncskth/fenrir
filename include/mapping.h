@@ -53,8 +53,7 @@ namespace SlamDemo {
         const cv::Mat &kernely,
         const cv::Mat &combinedTSLeft,
         const cv::Mat &combinedTSRight,
-        const vector<int> &xCenters,
-        const vector<int> &yCenters,
+        const vector<tuple<int, int>> &centers,
         const int start,
         const int end,
         cv::Mat& imgHSV
@@ -72,8 +71,7 @@ namespace SlamDemo {
         const cv::Mat &kernely,
         const cv::Mat &combinedTSLeft,
         const cv::Mat &combinedTSRight,
-        const vector<int> &xCenters,
-        const vector<int> &yCenters,
+        const vector<tuple<int, int>> &centers,
         cv::Mat& imgHSV
     );
 
@@ -92,7 +90,7 @@ namespace SlamDemo {
         const int halfBlockHeight,
         const int downsampling,
         const int searchBound,
-        queue<vector<dv::Event>> &incomingLeftEvents,
+        queue<vector<tuple<int, int>>> &incomingLeftEvents,
         cv::Mat &leftImage,
         cv::Mat &rightImage,
         queue<cv::Mat> &outgoingImages
