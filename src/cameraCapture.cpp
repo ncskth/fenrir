@@ -39,14 +39,15 @@ namespace SlamDemo {
         for(dv::Event ev : events) {
             int x = undistortRectifyMap1.at<int>(ev.y(), ev.x());
             int y = undistortRectifyMap2.at<int>(ev.y(), ev.x());
-            //cout << "Applied undistort maps " << x << " " << y << endl;
-            double diff = ev.polarity() ? gain : -gain;
-            // timestamps are in microseconds, decay is in milliseconds
-            double decayed = exp(1e-3*( timestamps[width*y + x] - ev.timestamp() )/decay) * (image.at<double>(y, x) - 0.5);
-            image.at<double>(y, x) = decayed + diff + 0.5;
-            //cout << "Updated image" << endl;
-            timestamps[width*y + x] = ev.timestamp();
-            //cout << "Updated timestamps" << endl;
+            double val = image.at<double>(y, x);
+
+            if((ev.polarity() && val < 0.9) || (!ev.polarity() && val > 0.1)) {
+                double diff = ev.polarity() ? gain : -gain;
+                // timestamps are in microseconds, decay is in milliseconds
+                double decayed = exp(1e-3*( timestamps[width*y + x] - ev.timestamp() )/decay) * (val - 0.5);
+                image.at<double>(y, x) = decayed + diff + 0.5;
+                timestamps[width*y + x] = ev.timestamp();
+            }
         }
     }
 
@@ -116,15 +117,15 @@ namespace SlamDemo {
                 //const auto high = highPass.generateEvents();
                 //lowPass.accept(high);
                 //const auto low = lowPass.generateEvents();
-                maskFilter.accept(*raw);
-                const auto masked = maskFilter.generateEvents();
+                //maskFilter.accept(*raw);
+                //const auto masked = maskFilter.generateEvents();
                 updateImageAndTimestamps(
                     accumulatorTimeConstant,
                     accumulatorGain,
                     resolution.width,
                     ref(redistortRectifyMat1),
                     ref(redistortRectifyMat2),
-                    masked,
+                    *raw,
                     image,
                     timestamps);
             }
@@ -225,20 +226,20 @@ namespace SlamDemo {
                 //const auto high = highPass.generateEvents();
                 //lowPass.accept(high);
                 //const auto low = lowPass.generateEvents();
-                maskFilter.accept(*raw);
-                const auto masked = maskFilter.generateEvents();
+                //maskFilter.accept(*raw);
+                //const auto masked = maskFilter.generateEvents();
                 updateImageAndTimestamps(
                     accumulatorTimeConstant,
                     accumulatorGain,
                     resolution.width,
                     ref(redistortRectifyMat1),
                     ref(redistortRectifyMat2),
-                    masked,
+                    *raw,
                     image,
                     timestamps);
                 //eventBuffer.add(masked);
                 //accumulator.accept(masked);
-                for(dv::Event ev : masked) {
+                for(dv::Event ev : *raw) {
                     //cout << "Trying to append to event buffer" << endl;
                     eventBuffer[bufferIndex] = {(int)ev.x(), (int)ev.y()};
                     //cout << "Appended to event buffer" << endl;
