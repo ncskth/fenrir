@@ -26,6 +26,7 @@
 #include <imageRepresentation.h>
 #include <tracking.h>
 #include <mapping.h>
+#include <imageSender.hpp>
 
 using namespace SlamDemo;
 
@@ -100,6 +101,7 @@ int main(int argc, char* argv[])
 
     string calibJSONPath;
     string hotPixelsDir;
+    string clientAddr;
     int highPassMicroseconds;
     double lowPassHz;
     int readCameraMilliseconds;
@@ -120,6 +122,7 @@ int main(int argc, char* argv[])
     desc.add_options()
         ("calibration-json", po::value<std::string>(&calibJSONPath), "Camera calibration file written in JSON according to inivation standards")
         ("hot-pixels-dir", po::value<std::string>(&hotPixelsDir), "In which directory to find numpy files describing which camera pixels are hot")
+        ("client-addr", po::value<std::string>(&clientAddr)->default_value(""), "If empty, visualize on the local machine, otherwise, send visualization frames to this IP address")
         ("high-pass-us", po::value<int>(&highPassMicroseconds)->default_value(1000), "Background noise filter time constant in microseconds")
         ("low-pass-hz", po::value<double>(&lowPassHz)->default_value(500.0), "Low pass filter frequency (inverse of refractory period)")
         ("read-camera-ms", po::value<int>(&readCameraMilliseconds)->default_value(100), "Interval in milliseconds in which buffered data from the camera is sent to the rest of the system")
@@ -215,12 +218,6 @@ int main(int argc, char* argv[])
     cv::Point3f gyroBias = imuCalib.omegaOffsetAvg;
     cv::Point3f accelBias = imuCalib.accOffsetAvg;
 
-    // Initialize a window to show previews of the output
-    cv::namedWindow("Left", cv::WINDOW_NORMAL);
-    cv::namedWindow("Right", cv::WINDOW_NORMAL);
-    cv::namedWindow("Trajectory", cv::WINDOW_NORMAL);
-    cv::namedWindow("Depth", cv::WINDOW_NORMAL);
-
     cv::Mat depthColorKey = drawDepthColorKey(ref(Q), sbmSearchBound);
 
     queue<vector<tuple<int, int>>> leftEventsToMap;
@@ -257,7 +254,6 @@ int main(int argc, char* argv[])
         ref(leftEventsToMap),
         ref(leftImage),
         ref(leftTimestamps),
-        //ref(leftImageToMap),
         ref(imuQueue)
     );
     thread rightCameraCaptureThread(
@@ -270,8 +266,6 @@ int main(int argc, char* argv[])
         eventAccumulatorMilliseconds,
         eventAccumulatorGain,
         readCameraMilliseconds,
-        //camMatR,
-        //distCoeffsR,
         mapR1,
         mapR2,
         ref(rightImage),
@@ -284,27 +278,6 @@ int main(int argc, char* argv[])
     //    accelBias,
     //    ref(imuQueue),
     //    ref(velocityVisQueue)
-    //);
-
-    //thread leftImageRepresentationThread(
-    //    &imageRepresentationLoop,
-    //    resolution,
-    //    eventAccumulatorMilliseconds,
-    //    camMatL,
-    //    distCoeffsL,
-    //    ref(leftCameraToImage),
-    //    ref(leftImageToRender),
-    //    ref(leftImageToMap)
-    //);
-    //thread rightImageRepresentationThread(
-    //    &imageRepresentationLoop,
-    //    resolution,
-    //    eventAccumulatorMilliseconds,
-    //    camMatR,
-    //    distCoeffsR,
-    //    ref(rightCameraToImage),
-    //    ref(rightImageToRender),
-    //    ref(rightImageToMap)
     //);
 
     thread depthEstimationThread(
@@ -323,39 +296,64 @@ int main(int argc, char* argv[])
         ref(depthImageQueue)
     );
 
-    // Run the processing loop while both cameras are connected
-    while (true) {
-        if (!depthImageQueue.empty()) {
-            //cv::Mat leftImage = leftImageToRender.front();
-            //leftImageToRender.pop();
-            //cv::Mat rightImage = rightImageToRender.front();
-            //rightImageToRender.pop();
-            auto depthImage = depthImageQueue.front();
-            depthImageQueue.pop();
-            cv::Mat depthImageKey;
-            cv::hconcat(depthImage, depthColorKey, depthImageKey);
+    if(clientAddr.empty()) {
+        // Initialize a window to show previews of the output
+        cv::namedWindow("Left", cv::WINDOW_NORMAL);
+        cv::namedWindow("Right", cv::WINDOW_NORMAL);
+        cv::namedWindow("Trajectory", cv::WINDOW_NORMAL);
+        cv::namedWindow("Depth", cv::WINDOW_NORMAL);
 
-            cv::Mat leftImageToRender = 255*leftImage;
-            cv::Mat rightImageToRender = 255*rightImage;
-            cv::Mat leftImageU8, rightImageU8;
-            leftImageToRender.convertTo(leftImageU8, CV_8UC1);
-            rightImageToRender.convertTo(rightImageU8, CV_8UC1);
+        while (true) {
+            if (!depthImageQueue.empty()) {
+                auto depthImage = depthImageQueue.front();
+                depthImageQueue.pop();
+                cv::Mat depthImageKey;
+                cv::hconcat(depthImage, depthColorKey, depthImageKey);
 
-            cv::imshow("Left", leftImageU8);
-            cv::imshow("Right", rightImageU8);
-            cv::imshow("Depth", depthImageKey);
+                cv::Mat leftImageToRender = 255*leftImage;
+                cv::Mat rightImageToRender = 255*rightImage;
+                cv::Mat leftImageU8, rightImageU8;
+                leftImageToRender.convertTo(leftImageU8, CV_8UC1);
+                rightImageToRender.convertTo(rightImageU8, CV_8UC1);
+
+                cv::imshow("Left", leftImageU8);
+                cv::imshow("Right", rightImageU8);
+                cv::imshow("Depth", depthImageKey);
+            }
+            if (!imuQueue.empty()) {
+                imuQueue.pop();
+            }
+            // Wait for a small amount of time to avoid CPU overhaul
+            cv::waitKey(2);
         }
-        //if (!velocityVisQueue.empty()) {
-        //    cv::Mat trajectoryVisualization = velocityVisQueue.front();
-        //    velocityVisQueue.pop();
-        //    cv::imshow("Trajectory", trajectoryVisualization);
-        //}
-        if (!imuQueue.empty()) {
-            imuQueue.pop();
-        }
-        // Wait for a small amount of time to avoid CPU overhaul
-        cv::waitKey(2);
+        //*/
+        return 0;
     }
-    //*/
-    return 0;
+    else {
+        auto sender = ZMQImageSender("tcp://" + clientAddr + ":5555");
+
+        while (true) {
+            if (!depthImageQueue.empty()) {
+                auto depthImage = depthImageQueue.front();
+                depthImageQueue.pop();
+                cv::Mat depthImageKey;
+                cv::hconcat(depthImage, depthColorKey, depthImageKey);
+
+                cv::Mat leftImageToRender = 255*leftImage;
+                cv::Mat rightImageToRender = 255*rightImage;
+                cv::Mat leftImageU8, rightImageU8;
+                leftImageToRender.convertTo(leftImageU8, CV_8UC1);
+                rightImageToRender.convertTo(rightImageU8, CV_8UC1);
+
+                sender.sendThreeImages(leftImageU8, rightImageU8, depthImageKey);
+            }
+            if (!imuQueue.empty()) {
+                imuQueue.pop();
+            }
+            // Wait for a small amount of time to avoid CPU overhaul
+            this_thread::sleep_for(chrono::milliseconds(2));
+        }
+        //*/
+        return 0;
+    }
 }

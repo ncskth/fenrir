@@ -21,7 +21,7 @@ Pass the flag `--no_filters` to see unfiltered events.
 From the project directory, simply run the executable:
 
 ```
-ncs@fenrir:~/Eben/fenrir$ build/SlamDemo --calibration-json fenrir_calibration.json --hot-pixels-dir hot_pixels_fenrir --sbm-num-threads 13
+ncs@fenrir:~/Eben/fenrir$ build/SlamDemo --calibration-json fenrir_calibration.json --hot-pixels-dir hot_pixels_fenrir --sbm-num-threads 12  --max-events-in-buffer 24000
 ```
 
 `--sbm-num-threads` is one of many adjustable flags, in this case controlling the number of threads dispatched for each stereo block matching operation.
@@ -59,3 +59,5 @@ The following should already be installed on the system, but if something breaks
 3) [dv-processing](https://dv-processing.inivation.com/master/installation.html)
 
 4) Boost (`sudo apt install libboost-all-dev`)
+
+5) ZeroMQ (`sudo apt install libzmq3-dev cppzmq-dev`)

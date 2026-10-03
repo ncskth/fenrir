@@ -6,6 +6,7 @@ set(OpenCV_FIND_REQUIRED_COMPONENTS core imgproc highgui)
 find_package(Boost REQUIRED COMPONENTS program_options)
 find_package(dv-processing REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(cppzmq REQUIRED)
 
 # Find cnpy manually
 find_path(cnpy_INCLUDE_DIR NAMES cnpy.h PATHS /usr/local/include)
@@ -36,6 +37,7 @@ target_link_libraries(SlamDemo PUBLIC
     ${OpenCV_LIBS}    # Changed from opencv_core
     cnpy_imported
     Boost::program_options
+    cppzmq
 )
 target_link_libraries(CopyPaste PUBLIC
     dv::processing
