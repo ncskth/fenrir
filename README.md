@@ -2,6 +2,13 @@
 
 ## Basic Event Visualization Demo
 
+SSH onto fenrir with X forwarding enabled
+
+```
+$ ssh -X ncs@fenrir
+$ cd Eben/fenrir
+```
+
 There should exist a python virtual environment, activate with the following command:
 
 ```
@@ -27,6 +34,28 @@ ncs@fenrir:~/Eben/fenrir$ build/SlamDemo --calibration-json fenrir_calibration.j
 `--sbm-num-threads` is one of many adjustable flags, in this case controlling the number of threads dispatched for each stereo block matching operation.
 
 If the executable does not exist for some reason, rebuild it as follows.
+
+## Depth Perception Demo Rendered on Client
+
+Rendering on fenrir and sending the GUI over SSH creates unnecessary overhead. Run the client script from the directory of this repository
+
+```
+python scripts/fenrir_vis_client.py
+```
+
+The dependencies for the above script are `numpy`, `opencv-python`, and `zmq`. The script can write a video if desired:
+
+```
+python scripts/fenrir_vis_client.py --record_video --video_name <DEFAULT=recording.mp4>
+```
+
+The video will be saved after you interrupt the application with `Ctrl+C`. Run the demo on the robot but now pointing it towards the local IP address of the client; if running from hugin:
+
+```
+ncs@fenrir:~/Eben/fenrir$ build/SlamDemo --calibration-json fenrir_calibration.json --hot-pixels-dir hot_pixels_fenrir --sbm-num-threads 12  --max-events-in-buffer 24000 --client-addr 172.16.222.30
+```
+
+#### Starting the demo on the robot before opening the client listener will cause depth frames to backlog on the robot, which will look really weird when you run the visualization.
 
 ### Build Instructions
 
