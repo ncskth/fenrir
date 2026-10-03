@@ -56,6 +56,7 @@ namespace SlamDemo {
         const string serial,
         const string hotPixelXFile,
         const string hotPixelYFile,
+        const double lowPassHz,
         const int highPassMicroseconds,
         const int accumulatorTimeConstant,
         const double accumulatorGain,
@@ -75,7 +76,7 @@ namespace SlamDemo {
         }
 
         dv::noise::BackgroundActivityNoiseFilter highPass(resolution, highPassMicroseconds*1us);
-        //dv::noise::LowPassFilter lowPass(resolution, lowPassHz);
+        dv::noise::LowPassFilter lowPass(resolution, lowPassHz);
 
         auto hotPixelsX = cnpy::npy_load(hotPixelXFile);
         auto hotPixelsY = cnpy::npy_load(hotPixelYFile);
@@ -115,8 +116,8 @@ namespace SlamDemo {
             if (const auto raw = camera->getNextEventBatch()) {
                 //highPass.accept(*raw);
                 //const auto high = highPass.generateEvents();
-                //lowPass.accept(high);
-                //const auto low = lowPass.generateEvents();
+                lowPass.accept(*raw);
+                const auto low = lowPass.generateEvents();
                 //maskFilter.accept(*raw);
                 //const auto masked = maskFilter.generateEvents();
                 updateImageAndTimestamps(
@@ -125,7 +126,7 @@ namespace SlamDemo {
                     resolution.width,
                     ref(redistortRectifyMat1),
                     ref(redistortRectifyMat2),
-                    *raw,
+                    low,
                     image,
                     timestamps);
             }
@@ -157,6 +158,7 @@ namespace SlamDemo {
         const string serial,
         const string hotPixelXFile,
         const string hotPixelYFile,
+        const double lowPassHz,
         const int highPassMicroseconds,
         const int accumulatorTimeConstant,
         const double accumulatorGain,
@@ -182,7 +184,7 @@ namespace SlamDemo {
         }
 
         dv::noise::BackgroundActivityNoiseFilter highPass(resolution, highPassMicroseconds*1us);
-        //dv::noise::LowPassFilter lowPass(resolution, lowPassHz);
+        dv::noise::LowPassFilter lowPass(resolution, lowPassHz);
 
         auto hotPixelsX = cnpy::npy_load(hotPixelXFile);
         auto hotPixelsY = cnpy::npy_load(hotPixelYFile);
@@ -224,8 +226,8 @@ namespace SlamDemo {
             if (const auto raw = camera->getNextEventBatch()) {
                 //highPass.accept(*raw);
                 //const auto high = highPass.generateEvents();
-                //lowPass.accept(high);
-                //const auto low = lowPass.generateEvents();
+                lowPass.accept(*raw);
+                const auto low = lowPass.generateEvents();
                 //maskFilter.accept(*raw);
                 //const auto masked = maskFilter.generateEvents();
                 updateImageAndTimestamps(
@@ -234,12 +236,12 @@ namespace SlamDemo {
                     resolution.width,
                     ref(redistortRectifyMat1),
                     ref(redistortRectifyMat2),
-                    *raw,
+                    low,
                     image,
                     timestamps);
                 //eventBuffer.add(masked);
                 //accumulator.accept(masked);
-                for(dv::Event ev : *raw) {
+                for(dv::Event ev : low) {
                     //cout << "Trying to append to event buffer" << endl;
                     eventBuffer[bufferIndex] = {(int)ev.x(), (int)ev.y()};
                     //cout << "Appended to event buffer" << endl;
