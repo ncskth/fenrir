@@ -7,47 +7,170 @@ namespace SlamDemo {
 
     barrier sync_point(2);
 
-    tuple<cv::Mat, cv::Mat> buildScatterIndex(
+    ReverseUndistortRectifyMap buildInterpolationMap(
         const cv::Mat& undistortRectifyMap1,
         const cv::Mat& undistortRectifyMap2,
         const int height, const int width
     ) {
-        cv::Mat newMat1(height, width, CV_32SC1);
-        cv::Mat newMat2(height, width, CV_32SC1);
+        cv::Mat topLeftToX(height, width, CV_32SC1);
+        cv::Mat topLeftToY(height, width, CV_32SC1);
+        cv::Mat topRightToX(height, width, CV_32SC1);
+        cv::Mat topRightToY(height, width, CV_32SC1);
+        cv::Mat bottomLeftToX(height, width, CV_32SC1);
+        cv::Mat bottomLeftToY(height, width, CV_32SC1);
+        cv::Mat bottomRightToX(height, width, CV_32SC1);
+        cv::Mat bottomRightToY(height, width, CV_32SC1);
+
+        cv::Mat topLeftToXWeight(height, width, CV_32FC1);
+        cv::Mat topLeftToYWeight(height, width, CV_32FC1);
+        cv::Mat topRightToXWeight(height, width, CV_32FC1);
+        cv::Mat topRightToYWeight(height, width, CV_32FC1);
+        cv::Mat bottomLeftToXWeight(height, width, CV_32FC1);
+        cv::Mat bottomLeftToYWeight(height, width, CV_32FC1);
+        cv::Mat bottomRightToXWeight(height, width, CV_32FC1);
+        cv::Mat bottomRightToYWeight(height, width, CV_32FC1);
 
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 float xf = undistortRectifyMap1.at<float>(y, x);
                 float yf = undistortRectifyMap2.at<float>(y, x);
-                newMat1.at<int>(lround(yf), lround(x)) = x;
-                newMat2.at<int>(lround(yf), lround(x)) = y;
+
+                int xi = max(0, (int)floorl(xf));
+                int yi = max(0, (int)floorl(yf));
+
+                float wHoriz = xf - xi;
+                float wVert = yf - yi;
+
+                topLeftToX.at<int>(min(height, yi + 1), xi) = x;
+                topLeftToY.at<int>(min(height, yi + 1), xi) = y;
+                topRightToX.at<int>(min(height, yi + 1), min(width, xi + 1)) = x;
+                topRightToY.at<int>(min(height, yi + 1), min(width, xi + 1)) = y;
+                bottomLeftToX.at<int>(yi, xi) = x;
+                bottomLeftToY.at<int>(yi, xi) = y;
+                bottomRightToX.at<int>(yi, min(width, xi + 1)) = x;
+                bottomRightToY.at<int>(yi, min(width, xi + 1)) = y;
+
+                topLeftToXWeight.at<float>(min(height, yi + 1), xi) = 1.0 - wHoriz;
+                topLeftToYWeight.at<float>(min(height, yi + 1), xi) = wVert;
+                topRightToXWeight.at<float>(min(height, yi + 1), min(width, xi + 1)) = wHoriz;
+                topRightToYWeight.at<float>(min(height, yi + 1), min(width, xi + 1)) = wVert;
+                bottomLeftToXWeight.at<float>(yi, xi) = 1.0 - wHoriz;
+                bottomLeftToYWeight.at<float>(yi, xi) = 1.0 - wVert;
+                bottomRightToXWeight.at<float>(yi, min(width, xi + 1)) = 1.0 - wHoriz;
+                bottomRightToYWeight.at<float>(yi, min(width, xi + 1)) = wVert;
             }
         }
-        return {newMat1, newMat2};
+
+        return ReverseUndistortRectifyMap{
+            topLeftToX,
+            topLeftToY,
+            topRightToX,
+            topRightToY,
+            bottomLeftToX,
+            bottomLeftToY,
+            bottomRightToX,
+            bottomRightToY,
+            topLeftToXWeight,
+            topLeftToYWeight,
+            topRightToXWeight,
+            topRightToYWeight,
+            bottomLeftToXWeight,
+            bottomLeftToYWeight,
+            bottomRightToXWeight,
+            bottomRightToYWeight
+        };
     }
 
     void updateImageAndTimestamps(
         const double decay,
         const double gain,
+        const int height,
         const int width,
-        const cv::Mat& undistortRectifyMap1,
-        const cv::Mat& undistortRectifyMap2,
+        const ReverseUndistortRectifyMap& interpolationMap,
         const dv::EventStore& events,
         cv::Mat& image,
         vector<int64_t>& timestamps
     ) {
         for(dv::Event ev : events) {
-            int x = undistortRectifyMap1.at<int>(ev.y(), ev.x());
-            int y = undistortRectifyMap2.at<int>(ev.y(), ev.x());
+
+            // BOTTOM LEFT
+
+            int xi = max(0, (int)floorl(ev.x()));
+            int yi = max(0, (int)floorl(ev.y()));
+
+            int x = interpolationMap.bottomLeftToX.at<int>(yi, xi);
+            int y = interpolationMap.bottomLeftToY.at<int>(yi, xi);
             double val = image.at<double>(y, x);
 
-            if((ev.polarity() && val < 0.9) || (!ev.polarity() && val > 0.1)) {
-                double diff = ev.polarity() ? gain : -gain;
+            if((ev.polarity() && val < 0.99) || (!ev.polarity() && val > 0.01)) {
+                float weight = interpolationMap.bottomLeftToXWeight.at<float>(yi, xi)
+                    * interpolationMap.bottomLeftToYWeight.at<float>(yi, xi);
+
+                double diff = ev.polarity() ? weight*gain : -weight*gain;
                 // timestamps are in microseconds, decay is in milliseconds
                 double decayed = exp(1e-3*( timestamps[width*y + x] - ev.timestamp() )/decay) * (val - 0.5);
                 image.at<double>(y, x) = decayed + diff + 0.5;
                 timestamps[width*y + x] = ev.timestamp();
             }
+
+            //cout << "Bottom left interpolation worked!" << endl;
+
+            // BOTTOM RIGHT
+
+            x = interpolationMap.bottomRightToX.at<int>(yi, min(width, xi + 1));
+            y = interpolationMap.bottomRightToY.at<int>(yi, min(width, xi + 1));
+            val = image.at<double>(y, x);
+
+            if((ev.polarity() && val < 0.99) || (!ev.polarity() && val > 0.01)) {
+                float weight = interpolationMap.bottomRightToXWeight.at<float>(yi, min(width, xi + 1))
+                    * interpolationMap.bottomRightToYWeight.at<float>(yi, min(width, xi + 1));
+
+                double diff = ev.polarity() ? weight*gain : -weight*gain;
+                // timestamps are in microseconds, decay is in milliseconds
+                double decayed = exp(1e-3*( timestamps[width*y + x] - ev.timestamp() )/decay) * (val - 0.5);
+                image.at<double>(y, x) = decayed + diff + 0.5;
+                timestamps[width*y + x] = ev.timestamp();
+            }
+
+            //cout << "Bottom right interpolation worked!" << endl;
+
+            // TOP RIGHT
+
+            x = interpolationMap.topRightToX.at<int>(min(height, yi + 1), min(width, xi + 1));
+            y = interpolationMap.topRightToY.at<int>(min(height, yi + 1), min(width, xi + 1));
+            val = image.at<double>(y, x);
+
+            if((ev.polarity() && val < 0.99) || (!ev.polarity() && val > 0.01)) {
+                float weight = interpolationMap.topRightToXWeight.at<float>(min(height, yi + 1), min(width, xi + 1))
+                    * interpolationMap.topRightToYWeight.at<float>(min(height, yi + 1), min(width, xi + 1));
+
+                double diff = ev.polarity() ? weight*gain : -weight*gain;
+                // timestamps are in microseconds, decay is in milliseconds
+                double decayed = exp(1e-3*( timestamps[width*y + x] - ev.timestamp() )/decay) * (val - 0.5);
+                image.at<double>(y, x) = decayed + diff + 0.5;
+                timestamps[width*y + x] = ev.timestamp();
+            }
+
+            //cout << "Top right interpolation worked!" << endl;
+
+            // TOP LEFT
+
+            x = interpolationMap.topLeftToX.at<int>(min(height, yi + 1), xi);
+            y = interpolationMap.topLeftToY.at<int>(min(height, yi + 1), xi);
+            val = image.at<double>(y, x);
+
+            if((ev.polarity() && val < 0.99) || (!ev.polarity() && val > 0.01)) {
+                float weight = interpolationMap.topLeftToXWeight.at<float>(min(height, yi + 1), xi)
+                    * interpolationMap.topLeftToYWeight.at<float>(min(height, yi + 1), xi);
+
+                double diff = ev.polarity() ? weight*gain : -weight*gain;
+                // timestamps are in microseconds, decay is in milliseconds
+                double decayed = exp(1e-3*( timestamps[width*y + x] - ev.timestamp() )/decay) * (val - 0.5);
+                image.at<double>(y, x) = decayed + diff + 0.5;
+                timestamps[width*y + x] = ev.timestamp();
+            }
+
+            //cout << "Top left interpolation worked!" << endl;
         }
     }
 
@@ -92,19 +215,8 @@ namespace SlamDemo {
         // Initialize an accumulator with some resolution
         dv::Accumulator accumulator(resolution);
 
-        // Apply configuration, these values can be modified to taste
-        //accumulator.setMinPotential(0.f);
-        //accumulator.setMaxPotential(1.f);
-        //accumulator.setNeutralPotential(0.5f);
-        //accumulator.setEventContribution(accumulatorGain);
-        //accumulator.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
-        //accumulator.setDecayParam(1e3*accumulatorTimeConstant);
-        //accumulator.setIgnorePolarity(false);
-        //accumulator.setSynchronousDecay(false);
-
-        auto inverted = buildScatterIndex(undistortRectifyMat1, undistortRectifyMat2, resolution.height, resolution.width);
-        cv::Mat redistortRectifyMat1 = get<0>(inverted);
-        cv::Mat redistortRectifyMat2 = get<1>(inverted);
+        ReverseUndistortRectifyMap interpolationMap = buildInterpolationMap(
+            undistortRectifyMat1, undistortRectifyMat2, resolution.height, resolution.width);
 
         cout << "Right camera ready!" << endl;
         sync_point.arrive_and_wait();
@@ -113,8 +225,8 @@ namespace SlamDemo {
 
         while (camera->isRunning()) {
             if (const auto raw = camera->getNextEventBatch()) {
-                //highPass.accept(*raw);
-                //const auto high = highPass.generateEvents();
+                highPass.accept(*raw);
+                const auto high = highPass.generateEvents();
                 //lowPass.accept(high);
                 //const auto low = lowPass.generateEvents();
                 //maskFilter.accept(*raw);
@@ -122,10 +234,10 @@ namespace SlamDemo {
                 updateImageAndTimestamps(
                     accumulatorTimeConstant,
                     accumulatorGain,
+                    resolution.height,
                     resolution.width,
-                    ref(redistortRectifyMat1),
-                    ref(redistortRectifyMat2),
-                    *raw,
+                    ref(interpolationMap),
+                    high,
                     image,
                     timestamps);
             }
@@ -201,19 +313,8 @@ namespace SlamDemo {
         // Initialize an accumulator with some resolution
         dv::Accumulator accumulator(resolution);
 
-        // Apply configuration, these values can be modified to taste
-        //accumulator.setMinPotential(0.f);
-        //accumulator.setMaxPotential(1.f);
-        //accumulator.setNeutralPotential(0.5f);
-        //accumulator.setEventContribution(accumulatorGain);
-        //accumulator.setDecayFunction(dv::Accumulator::Decay::EXPONENTIAL);
-        //accumulator.setDecayParam(1e3*accumulatorTimeConstant);
-        //accumulator.setIgnorePolarity(false);
-        //accumulator.setSynchronousDecay(false);
-
-        auto inverted = buildScatterIndex(undistortRectifyMat1, undistortRectifyMat2, resolution.height, resolution.width);
-        cv::Mat redistortRectifyMat1 = get<0>(inverted);
-        cv::Mat redistortRectifyMat2 = get<1>(inverted);
+        ReverseUndistortRectifyMap interpolationMap = buildInterpolationMap(
+            undistortRectifyMat1, undistortRectifyMat2, resolution.height, resolution.width);
 
         cout << "Left camera ready!" << endl;
         sync_point.arrive_and_wait();
@@ -222,8 +323,8 @@ namespace SlamDemo {
 
         while (camera->isRunning()) {
             if (const auto raw = camera->getNextEventBatch()) {
-                //highPass.accept(*raw);
-                //const auto high = highPass.generateEvents();
+                highPass.accept(*raw);
+                const auto high = highPass.generateEvents();
                 //lowPass.accept(high);
                 //const auto low = lowPass.generateEvents();
                 //maskFilter.accept(*raw);
@@ -231,15 +332,15 @@ namespace SlamDemo {
                 updateImageAndTimestamps(
                     accumulatorTimeConstant,
                     accumulatorGain,
+                    resolution.height,
                     resolution.width,
-                    ref(redistortRectifyMat1),
-                    ref(redistortRectifyMat2),
-                    *raw,
+                    interpolationMap,
+                    high,
                     image,
                     timestamps);
                 //eventBuffer.add(masked);
                 //accumulator.accept(masked);
-                for(dv::Event ev : *raw) {
+                for(dv::Event ev : high) {
                     //cout << "Trying to append to event buffer" << endl;
                     eventBuffer[bufferIndex] = {(int)ev.x(), (int)ev.y()};
                     //cout << "Appended to event buffer" << endl;
@@ -256,7 +357,6 @@ namespace SlamDemo {
             if (now - lastQPush > sendIntervalMilliseconds * 1ms && imuBuffer.size() > 1 && eventBuffer.size() > 1) {
                 outgoingEvents.push(eventBuffer);
                 //eventBuffer = dv::EventStore();
-                bufferIndex = 0;
 
                 //dv::Frame frame = accumulator.generateFrame();
                 //cv::Mat imageDistorted = frame.image;

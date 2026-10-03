@@ -18,12 +18,37 @@
 namespace SlamDemo {
     using namespace std;
 
+    struct ReverseUndistortRectifyMap {
+        cv::Mat topLeftToX;
+        cv::Mat topLeftToY;
+        cv::Mat topRightToX;
+        cv::Mat topRightToY;
+        cv::Mat bottomLeftToX;
+        cv::Mat bottomLeftToY;
+        cv::Mat bottomRightToX;
+        cv::Mat bottomRightToY;
+        cv::Mat topLeftToXWeight;
+        cv::Mat topLeftToYWeight;
+        cv::Mat topRightToXWeight;
+        cv::Mat topRightToYWeight;
+        cv::Mat bottomLeftToXWeight;
+        cv::Mat bottomLeftToYWeight;
+        cv::Mat bottomRightToXWeight;
+        cv::Mat bottomRightToYWeight;
+    };
+
+    ReverseUndistortRectifyMap buildInterpolationMap(
+        const cv::Mat& undistortRectifyMap1,
+        const cv::Mat& undistortRectifyMap2,
+        const int height, const int width
+    );
+
     void updateImageAndTimestamps(
         const double decay,
         const double gain,
+        const int height,
         const int width,
-        const cv::Mat& undistortRectifyMap1,
-        const cv::Mat& undistortRectifyMap2,
+        const ReverseUndistortRectifyMap& interpolationMap,
         const dv::EventStore& events,
         cv::Mat& image,
         vector<int64_t>& timestamps

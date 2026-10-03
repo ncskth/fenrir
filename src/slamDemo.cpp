@@ -168,12 +168,12 @@ int main(int argc, char* argv[])
     auto rightCameraCalib = calibration.getCameraCalibration("C1").value();
     const cv::Size resolution = leftCameraCalib.resolution;
 
-    // Direct assignment - no element-by-element copying
-    cv::Mat camMatL_mat = cv::Mat(leftCameraCalib.getCameraMatrix());  // CV_32F
-    cv::Mat camMatR_mat = cv::Mat(rightCameraCalib.getCameraMatrix()); // CV_32F
+    // These matrices are CV_32F
+    cv::Mat camMatL_mat = cv::Mat(leftCameraCalib.getCameraMatrix());
+    cv::Mat camMatR_mat = cv::Mat(rightCameraCalib.getCameraMatrix());
 
-    cv::Mat distCoeffsL_mat = cv::Mat(leftCameraCalib.distortion);     // CV_32F
-    cv::Mat distCoeffsR_mat = cv::Mat(rightCameraCalib.distortion);    // CV_32F
+    cv::Mat distCoeffsL_mat = cv::Mat(leftCameraCalib.distortion);
+    cv::Mat distCoeffsR_mat = cv::Mat(rightCameraCalib.distortion);
 
     auto Reigen = rightCameraCalib.transformationToC0.getRotationMatrix();
     auto Teigen = rightCameraCalib.transformationToC0.getTranslation();
@@ -220,13 +220,19 @@ int main(int argc, char* argv[])
 
     cv::Mat depthColorKey = drawDepthColorKey(ref(Q), sbmSearchBound);
 
+    // this queue transports event locations from the left camera
+    // to the depth estimator
     queue<vector<tuple<int, int>>> leftEventsToMap;
+    // this queue collects IMU data from the left camera, but is not currently used
     queue<vector<dv::IMU>> imuQueue;
+    // this queue is supposed to be used for visualizing camera velocity,
+    // but is not currently used
     queue<cv::Mat> velocityVisQueue;
-    //queue<cv::Mat> leftImageToRender;
-    //queue<cv::Mat> rightImageToRender;
+    // this queue transports depth visualizations from the depth estimation thread
+    // to the main thread
     queue<cv::Mat> depthImageQueue;
 
+    // initialize the left and right accumulated images to be perfectly grey
     cv::Mat leftImage = 0.5*cv::Mat::ones(resolution.height, resolution.width, CV_64FC1);
     cv::Mat rightImage = 0.5*cv::Mat::ones(resolution.height, resolution.width, CV_64FC1);
     vector<int64_t> leftTimestamps(resolution.area());
@@ -235,8 +241,6 @@ int main(int argc, char* argv[])
         leftTimestamps[i] = 0;
         rightTimestamps[i] = 0;
     }
-
-    cv::Mat trajectoryVisualization = cv::Mat::zeros(400, 400, CV_8UC1);
 
     thread leftCameraCaptureThread(
         &leftCameraCapture,
