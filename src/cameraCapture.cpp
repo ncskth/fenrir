@@ -12,18 +12,76 @@ namespace SlamDemo {
         const cv::Mat& undistortRectifyMap2,
         const int height, const int width
     ) {
-        cv::Mat newMat1(height, width, CV_32SC1);
-        cv::Mat newMat2(height, width, CV_32SC1);
+        cv::Mat mapX(height, width, CV_32SC1);
+        cv::Mat mapY(height, width, CV_32SC1);
+        cv::Mat scoreX = cv::Mat::ones(height, width, CV_32FC1);
+        cv::Mat scoreY = cv::Mat::ones(height, width, CV_32FC1);
 
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 float xf = undistortRectifyMap1.at<float>(y, x);
                 float yf = undistortRectifyMap2.at<float>(y, x);
-                newMat1.at<int>(lround(yf), lround(x)) = x;
-                newMat2.at<int>(lround(yf), lround(x)) = y;
+
+                long xl = lround(xf);
+                long yl = lround(yf);
+
+                float errx = abs(xf - xl);
+                float erry = abs(yf - yl);
+
+                // first check if the nearest integer pixel is the best fit
+                if(errx < scoreX.at<float>(yl, xl) && erry < scoreY.at<float>(yl, xl)) {
+                    mapX.at<int>(yl, xl) = x;
+                    mapY.at<int>(yl, xl) = y;
+                    scoreX.at<float>(yl, xl) = errx;
+                    scoreY.at<float>(yl, xl) = erry;
+                }
+                // otherwise check all four neighbors
+                else {
+                    // technically this is not the most efficient logic, but it doesn't matter
+                    xl = floorl(xf);
+                    yl = floorl(yf);
+                    errx = abs(xf - xl);
+                    erry = abs(yf - yl);
+                    if(errx < scoreX.at<float>(yl, xl) && erry < scoreY.at<float>(yl, xl)) {
+                        mapX.at<int>(yl, xl) = x;
+                        mapY.at<int>(yl, xl) = y;
+                        scoreX.at<float>(yl, xl) = errx;
+                        scoreY.at<float>(yl, xl) = erry;
+                    }
+                    else {
+                        xl++;
+                        errx = abs(xf - xl);
+                        if(errx < scoreX.at<float>(yl, xl) && erry < scoreY.at<float>(yl, xl)) {
+                            mapX.at<int>(yl, xl) = x;
+                            mapY.at<int>(yl, xl) = y;
+                            scoreX.at<float>(yl, xl) = errx;
+                            scoreY.at<float>(yl, xl) = erry;
+                        }
+                        else {
+                            yl++;
+                            erry = abs(yf - yl);
+                            if(errx < scoreX.at<float>(yl, xl) && erry < scoreY.at<float>(yl, xl)) {
+                                mapX.at<int>(yl, xl) = x;
+                                mapY.at<int>(yl, xl) = y;
+                                scoreX.at<float>(yl, xl) = errx;
+                                scoreY.at<float>(yl, xl) = erry;
+                            }
+                            else {
+                                xl--;
+                                errx = abs(xf - xl);
+                                if(errx < scoreX.at<float>(yl, xl) && erry < scoreY.at<float>(yl, xl)) {
+                                    mapX.at<int>(yl, xl) = x;
+                                    mapY.at<int>(yl, xl) = y;
+                                    scoreX.at<float>(yl, xl) = errx;
+                                    scoreY.at<float>(yl, xl) = erry;
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
-        return {newMat1, newMat2};
+        return {mapX, mapY};
     }
 
     void updateImageAndTimestamps(
