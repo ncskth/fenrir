@@ -21,6 +21,7 @@ namespace SlamDemo {
     void updateImageAndTimestamps(
         const double decay,
         const double gain,
+        const int height,
         const int width,
         const cv::Mat& undistortRectifyMap1,
         const cv::Mat& undistortRectifyMap2,
@@ -34,6 +35,7 @@ namespace SlamDemo {
         const string serial,
         const string hotPixelXFile,
         const string hotPixelYFile,
+        const double lowPassHz,
         const int highPassMicroseconds,
         const int accumulatorTimeConstant,
         const double accumulatorGain,
@@ -49,6 +51,7 @@ namespace SlamDemo {
         const string serial,
         const string hotPixelXFile,
         const string hotPixelYFile,
+        const double lowPassHz,
         const int highPassMicroseconds,
         const int accumulatorTimeConstant,
         const double accumulatorGain,
