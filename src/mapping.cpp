@@ -241,7 +241,7 @@ namespace SlamDemo
 
         StereoBlockMatch result = {centerX, centerY, pixelDisparity, bestCorrelation};
 
-        drawSingleMatch(searchBound, result, imageHSV);
+        //drawSingleMatch(searchBound, result, imageHSV);
 
         return result;
     }
@@ -387,7 +387,7 @@ namespace SlamDemo
         queue<vector<tuple<int, int>>> &incomingLeftEvents,
         cv::Mat &leftImage,
         cv::Mat &rightImage,
-        queue<cv::Mat> &outgoingImages)
+        queue<vector<tuple<int, int, int>>> &outgoingImages)
     {
         auto kernels = edgeKernels(min(2*halfBlockWidth, 2*halfBlockHeight));
         cv::Mat kernelx = get<0>(kernels);
@@ -419,9 +419,21 @@ namespace SlamDemo
                     ref(visHSV));
 
                 //cv::Mat vis = drawBlockMatchingResult(resolution, searchBound, matchResult);
-                cv::cvtColor(visHSV, visBGR, cv::COLOR_HSV2BGR);
+                //cv::cvtColor(visHSV, visBGR, cv::COLOR_HSV2BGR);
+                vector<tuple<int, int, int>> result;
+                for(vector<StereoBlockMatch> outer : matchResult) {
+                    for(StereoBlockMatch match : outer) {
+                        if(match.pixelDisparity > -1) {
+                            result.push_back({
+                                match.x,
+                                match.y,
+                                match.pixelDisparity
+                            });
+                        }
+                    }
+                }
 
-                outgoingImages.push(visBGR);
+                outgoingImages.push(result);
             }
             else
             {
