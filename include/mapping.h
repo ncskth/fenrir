@@ -93,6 +93,6 @@ namespace SlamDemo {
         queue<vector<tuple<int, int>>> &incomingLeftEvents,
         cv::Mat &leftImage,
         cv::Mat &rightImage,
-        queue<cv::Mat> &outgoingImages
+        queue<vector<tuple<int, int, int>>> &outgoingImages
     );
 }

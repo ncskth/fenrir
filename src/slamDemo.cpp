@@ -225,7 +225,7 @@ int main(int argc, char* argv[])
     queue<cv::Mat> velocityVisQueue;
     //queue<cv::Mat> leftImageToRender;
     //queue<cv::Mat> rightImageToRender;
-    queue<cv::Mat> depthImageQueue;
+    queue<vector<tuple<int, int, int>>> depthImageQueue;
 
     cv::Mat leftImage = 0.5*cv::Mat::ones(resolution.height, resolution.width, CV_64FC1);
     cv::Mat rightImage = 0.5*cv::Mat::ones(resolution.height, resolution.width, CV_64FC1);
@@ -297,6 +297,7 @@ int main(int argc, char* argv[])
     );
 
     if(clientAddr.empty()) {
+        /*
         // Initialize a window to show previews of the output
         cv::namedWindow("Left", cv::WINDOW_NORMAL);
         cv::namedWindow("Right", cv::WINDOW_NORMAL);
@@ -326,7 +327,8 @@ int main(int argc, char* argv[])
             // Wait for a small amount of time to avoid CPU overhaul
             cv::waitKey(2);
         }
-        //*/
+        */
+        cout << "Displaying visualization results on the host is temporarily broken!" << endl;
         return 0;
     }
     else {
@@ -334,18 +336,20 @@ int main(int argc, char* argv[])
 
         while (true) {
             if (!depthImageQueue.empty()) {
-                auto depthImage = depthImageQueue.front();
+                auto depthResults = depthImageQueue.front();
                 depthImageQueue.pop();
-                cv::Mat depthImageKey;
-                cv::hconcat(depthImage, depthColorKey, depthImageKey);
+                //cv::Mat depthImageKey;
+                //cv::hconcat(depthImage, depthColorKey, depthImageKey);
 
-                cv::Mat leftImageToRender = 255*leftImage;
-                cv::Mat rightImageToRender = 255*rightImage;
-                cv::Mat leftImageU8, rightImageU8;
-                leftImageToRender.convertTo(leftImageU8, CV_8UC1);
-                rightImageToRender.convertTo(rightImageU8, CV_8UC1);
+                if(depthResults.size() > 0) {
+                    cv::Mat leftImageToRender = 255*leftImage;
+                    cv::Mat rightImageToRender = 255*rightImage;
+                    cv::Mat leftImageU8, rightImageU8;
+                    leftImageToRender.convertTo(leftImageU8, CV_8UC1);
+                    rightImageToRender.convertTo(rightImageU8, CV_8UC1);
 
-                sender.sendThreeImages(leftImageU8, rightImageU8, depthImageKey);
+                    sender.sendFullVisFrame(leftImageU8, rightImageU8, depthResults);
+                }
             }
             if (!imuQueue.empty()) {
                 imuQueue.pop();
