@@ -50,9 +50,13 @@ def hsv_to_rgb(h, s, v):
 
 
 def draw_depth_frame(depth_measurements: List[Tuple[int, int, int]], search_bound: int) -> np.ndarray:
+    ds = np.array([d for _, _, d in depth_measurements])
+    hsv = np.stack((120*(1 - ds/search_bound), 255*np.ones_like(ds), 255*np.ones_like(ds)), axis=-1)
+    hsv = hsv.astype(np.uint8).reshape((1, *hsv.shape))
+    rgb = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)[0]
     result = np.zeros((480, 640, 3), dtype=np.uint8)
-    for x, y, d in depth_measurements:
-        result[y, x] = hsv_to_rgb(120*d/(180*search_bound), 1, 1)
+    for i, (x, y, _) in enumerate(depth_measurements):
+        result[[y-1, y, y+1], [x-1, x, x+1]] = rgb[i]
     return result
 
 
