@@ -91,10 +91,14 @@ namespace SlamDemo {
         const cv::Mat& undistortRectifyMap1,
         const cv::Mat& undistortRectifyMap2,
         const dv::EventStore& events,
+        const int start,
+        const int stop,
         cv::Mat& image,
         vector<int64_t>& timestamps
     ) {
-        for(dv::Event ev : events) {
+        for(int i = start; i < stop; i++) {
+            auto ev = events[i];
+
             int x = undistortRectifyMap1.at<int>(ev.y(), ev.x());
             int y = undistortRectifyMap2.at<int>(ev.y(), ev.x());
             double val = image.at<double>(y, x);
@@ -177,6 +181,19 @@ namespace SlamDemo {
                 //const auto low = lowPass.generateEvents();
                 //maskFilter.accept(*raw);
                 //const auto masked = maskFilter.generateEvents();
+                auto future = async(launch::async, [&] {
+                    updateImageAndTimestamps(
+                        accumulatorTimeConstant,
+                        accumulatorGain,
+                        resolution.width,
+                        ref(redistortRectifyMat1),
+                        ref(redistortRectifyMat2),
+                        *raw,
+                        0,
+                        (int)(raw->size())/2,
+                        image,
+                        timestamps);
+                });
                 updateImageAndTimestamps(
                     accumulatorTimeConstant,
                     accumulatorGain,
@@ -184,8 +201,11 @@ namespace SlamDemo {
                     ref(redistortRectifyMat1),
                     ref(redistortRectifyMat2),
                     *raw,
+                    (int)(raw->size())/2,
+                    (int)(raw->size()),
                     image,
                     timestamps);
+                future.get();
             }
 
             auto now = chrono::high_resolution_clock::now();
@@ -286,6 +306,19 @@ namespace SlamDemo {
                 //const auto low = lowPass.generateEvents();
                 //maskFilter.accept(*raw);
                 //const auto masked = maskFilter.generateEvents();
+                auto future = async(launch::async, [&] {
+                    updateImageAndTimestamps(
+                        accumulatorTimeConstant,
+                        accumulatorGain,
+                        resolution.width,
+                        ref(redistortRectifyMat1),
+                        ref(redistortRectifyMat2),
+                        *raw,
+                        0,
+                        (int)(raw->size())/2,
+                        image,
+                        timestamps);
+                });
                 updateImageAndTimestamps(
                     accumulatorTimeConstant,
                     accumulatorGain,
@@ -293,8 +326,11 @@ namespace SlamDemo {
                     ref(redistortRectifyMat1),
                     ref(redistortRectifyMat2),
                     *raw,
+                    (int)(raw->size())/2,
+                    (int)(raw->size()),
                     image,
                     timestamps);
+                future.get();
                 //eventBuffer.add(masked);
                 //accumulator.accept(masked);
                 for(dv::Event ev : *raw) {

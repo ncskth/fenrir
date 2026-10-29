@@ -40,13 +40,13 @@ If the executable does not exist for some reason, rebuild it as follows.
 Rendering on fenrir and sending the GUI over SSH creates unnecessary overhead. Run the client script from the directory of this repository
 
 ```
-python scripts/fenrir_vis_client.py
+python scripts/fenrir_vis_client.py --calib_json fenrir_calibration.json
 ```
 
-The dependencies for the above script are `numpy`, `opencv-python`, and `zmq`. The script can write a video if desired:
+The dependencies for the above script are `numpy`, `opencv-python`, and `zmq`. The calibration file is so that the depth color key can be calculated correctly. The script can write a video if desired:
 
 ```
-python scripts/fenrir_vis_client.py --record_video --video_name <DEFAULT=recording.mp4>
+python scripts/fenrir_vis_client.py --calib_json fenrir_calibration.json --record_video --video_name <DEFAULT=recording.mp4>
 ```
 
 The video will be saved after you interrupt the application with `Ctrl+C`. Run the demo on the robot but now pointing it towards the local IP address of the client; if running from hugin:

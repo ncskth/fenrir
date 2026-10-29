@@ -209,7 +209,7 @@ def main():
             image = receive_and_update_full_frame(sock, image, args.search_bound)
 
             if args.record_video:
-                video_frames.append(image)
+                video_frames.append(np.copy(image))
 
             cv2.imshow("Demo",  image)
             cv2.waitKey(2)

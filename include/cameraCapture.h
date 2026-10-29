@@ -12,6 +12,7 @@
 #include <iostream>
 #include <string>
 #include <barrier>
+#include <future>
 
 #include <cnpy.h>
 
@@ -25,6 +26,8 @@ namespace SlamDemo {
         const cv::Mat& undistortRectifyMap1,
         const cv::Mat& undistortRectifyMap2,
         const dv::EventStore& events,
+        const int start,
+        const int stop,
         cv::Mat& image,
         vector<int64_t>& timestamps
     );
