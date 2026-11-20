@@ -40,7 +40,7 @@ If the executable does not exist for some reason, rebuild it as follows.
 Rendering on fenrir and sending the GUI over SSH creates unnecessary overhead. Run the client script from the directory of this repository
 
 ```
-python scripts/fenrir_vis_client.py --calib_json fenrir_calibration.json
+python scripts/fenrir_depth_vis_client.py --calib_json fenrir_calibration.json
 ```
 
 The dependencies for the above script are `numpy`, `opencv-python`, and `zmq`. The calibration file is so that the depth color key can be calculated correctly. The script can write a video if desired:

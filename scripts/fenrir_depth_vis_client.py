@@ -5,6 +5,7 @@ import cv2
 import struct
 import argparse
 from dv_processing import camera
+from zmq.utils.monitor import recv_monitor_message
 
 from typing import *
 
@@ -56,7 +57,9 @@ def draw_depth_frame(depth_measurements: List[Tuple[int, int, int]], search_boun
     rgb = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)[0]
     result = np.zeros((480, 640, 3), dtype=np.uint8)
     for i, (x, y, _) in enumerate(depth_measurements):
-        result[[y-1, y, y+1], [x-1, x, x+1]] = rgb[i]
+        x_, y_ = np.meshgrid(np.arange(max(0, y-1), min(480, y+2)),
+                             np.arange(max(0, x-1), min(640, x+2)))
+        result[x_, y_] = rgb[i]
     return result
 
 
@@ -126,8 +129,6 @@ def recv_message(sock):
     TAG_TRIPLES = b'\x02'
 
     tag = sock.recv()
-    #print(tag_bytes)
-    #tag = tag_bytes[0]
 
     if tag == TAG_LEFT:
         meta = sock.recv()
@@ -193,19 +194,6 @@ def main():
 
     while True:
         try:
-            """
-            payload = []
-            for _ in range(3):
-                meta = sock.recv()
-                data = sock.recv()
-                payload.append(frame_to_mat(meta, data))
-
-            left, right, depth = payload
-            img1 = np.concatenate((depth, np.zeros((480, 440, 3), dtype=np.uint8)), axis=1)
-            img2 = np.concatenate((left, right), axis=1)
-            img2 = np.stack([img2, img2, img2], axis=-1)
-            image = np.concatenate((img1, img2), axis=0)
-            """
             image = receive_and_update_full_frame(sock, image, args.search_bound)
 
             if args.record_video:
