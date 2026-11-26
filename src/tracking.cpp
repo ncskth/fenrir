@@ -1,6 +1,6 @@
 #include <tracking.h>
 
-namespace SlamDemo {
+namespace Fenrir {
 
 using namespace std::chrono_literals;
 using namespace std;

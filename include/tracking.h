@@ -11,7 +11,7 @@
 #include <queue>
 #include <iostream>
 
-namespace SlamDemo {
+namespace Fenrir {
     using namespace std;
 
     tuple<cv::Mat, double> initalRotationFromGravity(vector<dv::IMU> imuReadings, cv::Point3f bias);

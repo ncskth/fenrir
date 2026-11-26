@@ -1,12 +1,6 @@
 #include <dv-processing/io/camera/discovery.hpp>
-#include <dv-processing/visualization/event_visualizer.hpp>
-#include <dv-processing/data/generate.hpp>
-#include <dv-processing/noise/background_activity_noise_filter.hpp>
-#include <dv-processing/noise/frequency_filters.hpp>
 #include <dv-processing/core/core.hpp>
 #include <dv-processing/camera/calibration_set.hpp>
-#include <dv-processing/core/stereo_event_stream_slicer.hpp>
-#include <dv-processing/depth/semi_dense_stereo_matcher.hpp>
 
 #include <opencv2/viz.hpp>
 #include <opencv2/core.hpp>
@@ -25,74 +19,14 @@
 #include <cameraCapture.h>
 #include <imageRepresentation.h>
 #include <tracking.h>
-#include <mapping.h>
+#include <disparityEstimation.h>
 #include <imageSender.hpp>
+#include <visualization.h>
 
-using namespace SlamDemo;
+using namespace Fenrir;
 
 using namespace std::chrono_literals;
 using namespace std;
-
-cv::Mat drawDepthColorKey(const cv::Mat& Q, int sbmSearchBound) {
-    // Get focal length and baseline from Q
-    double f = Q.at<double>(2, 3);
-    double Tx = -1.0 / Q.at<double>(3, 2);
-
-    // Create key image (vertical color bar)
-    int height = 480;
-    int width = 200;
-    cv::Mat key = cv::Mat::zeros(height, width, CV_8UC3);
-
-    // Fill color bar
-    for(int y = height - 1; y >= 0; y--) {
-        // Normalized disparity from 0 to sbmSearchBound
-        float disp = 1.0 - (float)(height - y - 1) / height;
-
-        // Hue from 0 to 120 (red to green in HSV)
-        uint8_t hue = (uint8_t)(120.0f * disp);
-
-        // HSV to BGR
-        cv::Mat hsv(1, 1, CV_8UC3);
-        hsv.at<cv::Vec3b>(0,0) = cv::Vec3b(hue, 255, 255); // OpenCV HSV: H/2
-        cv::Mat bgr;
-        cv::cvtColor(hsv, bgr, cv::COLOR_HSV2BGR);
-
-        // Fill half of the row
-        for(int x = 0; x < width/2; x++) {
-            key.at<cv::Vec3b>(y, x) = bgr.at<cv::Vec3b>(0,0);
-        }
-    }
-
-    // Add ticks and labels
-    int numTicks = 5;
-    for(int i = numTicks - 1; i >= 0; i--) {
-        // Disparity from 2 to sbmSearchBound
-        float disp = 10.0f + (float)i / (numTicks - 1) * (sbmSearchBound - 20);
-        float depth = f * Tx / disp;
-
-        int y = (int)((disp / sbmSearchBound) * height);
-        if(y < 0) y = 0;
-        if(y >= height) y = height - 1;
-
-        // Draw tick mark
-        cv::line(key, cv::Point(width - 10, y), cv::Point(width, y), cv::Scalar(255,255,255), 2);
-
-        // Draw label
-        std::string label = cv::format("%.2f m", depth);
-        cv::putText(key, label, cv::Point(100, y+5), cv::FONT_HERSHEY_SIMPLEX,
-                    0.4, cv::Scalar(255,255,255), 1);
-    }
-
-    // Add title
-    //cv::putText(key, "Depth", cv::Point(20, 20), cv::FONT_HERSHEY_SIMPLEX,
-    //            0.6, cv::Scalar(255,255,255), 1);
-    cv::putText(key, "Near", cv::Point(20, height-10), cv::FONT_HERSHEY_SIMPLEX,
-                0.6, cv::Scalar(200,200,200), 1);
-    cv::putText(key, "Far", cv::Point(20, 20), cv::FONT_HERSHEY_SIMPLEX,
-                0.6, cv::Scalar(200,200,200), 1);
-
-    return key;
-}
 
 int main(int argc, char* argv[])
 {
@@ -168,7 +102,6 @@ int main(int argc, char* argv[])
     auto rightCameraCalib = calibration.getCameraCalibration("C1").value();
     const cv::Size resolution = leftCameraCalib.resolution;
 
-    // Direct assignment - no element-by-element copying
     cv::Mat camMatL_mat = cv::Mat(leftCameraCalib.getCameraMatrix());  // CV_32F
     cv::Mat camMatR_mat = cv::Mat(rightCameraCalib.getCameraMatrix()); // CV_32F
 
@@ -192,7 +125,7 @@ int main(int argc, char* argv[])
     // Stereo rectify (CV_64F)
     cv::Mat R1, R2, P1, P2, Q;
     stereoRectify(camMatL_mat, distCoeffsL_mat, camMatR_mat, distCoeffsR_mat,
-                resolution, R, T, R1, R2, P1, P2, Q);
+                  resolution, R, T, R1, R2, P1, P2, Q);
 
     // Convert back to CV_32F for initUndistortRectifyMap
     cv::Mat camMatL_32, camMatR_32, distCoeffsL_32, distCoeffsR_32;
@@ -223,9 +156,7 @@ int main(int argc, char* argv[])
     queue<vector<tuple<int, int>>> leftEventsToMap;
     queue<vector<dv::IMU>> imuQueue;
     queue<cv::Mat> velocityVisQueue;
-    //queue<cv::Mat> leftImageToRender;
-    //queue<cv::Mat> rightImageToRender;
-    queue<vector<tuple<int, int, int>>> depthImageQueue;
+    queue<vector<StereoBlockMatch>> depthEstimateQueue;
 
     cv::Mat leftImage = 0.5*cv::Mat::ones(resolution.height, resolution.width, CV_64FC1);
     cv::Mat rightImage = 0.5*cv::Mat::ones(resolution.height, resolution.width, CV_64FC1);
@@ -293,53 +224,66 @@ int main(int argc, char* argv[])
         ref(leftEventsToMap),
         ref(leftImage),
         ref(rightImage),
-        ref(depthImageQueue)
+        ref(depthEstimateQueue)
     );
 
     if(clientAddr.empty()) {
-        /*
-        // Initialize a window to show previews of the output
-        cv::namedWindow("Left", cv::WINDOW_NORMAL);
-        cv::namedWindow("Right", cv::WINDOW_NORMAL);
-        cv::namedWindow("Trajectory", cv::WINDOW_NORMAL);
-        cv::namedWindow("Depth", cv::WINDOW_NORMAL);
+
+        cv::namedWindow("Depth Demo", cv::WINDOW_NORMAL);
+
+        cv::Mat depthColorKey = drawDepthColorKey(ref(Q), sbmSearchBound);
+        cv::Mat image = cv::Mat::zeros(960, 1280, CV_8UC3);
+        // Place the color key at [0:480, 640:840].
+        depthColorKey.copyTo(image(cv::Rect(640, 0, depthColorKey.cols, depthColorKey.rows)));
 
         while (true) {
-            if (!depthImageQueue.empty()) {
-                auto depthImage = depthImageQueue.front();
-                depthImageQueue.pop();
-                cv::Mat depthImageKey;
-                cv::hconcat(depthImage, depthColorKey, depthImageKey);
 
-                cv::Mat leftImageToRender = 255*leftImage;
-                cv::Mat rightImageToRender = 255*rightImage;
-                cv::Mat leftImageU8, rightImageU8;
-                leftImageToRender.convertTo(leftImageU8, CV_8UC1);
-                rightImageToRender.convertTo(rightImageU8, CV_8UC1);
+            if (!depthEstimateQueue.empty()) {
+                auto depthResults = depthEstimateQueue.front();
+                depthEstimateQueue.pop();
 
-                cv::imshow("Left", leftImageU8);
-                cv::imshow("Right", rightImageU8);
-                cv::imshow("Depth", depthImageKey);
+                if(depthResults.size() > 0) {
+                    // render depth estimation results
+                    cv::Mat depthRender = drawDepthFrame(depthResults, sbmSearchBound);
+                    cv::Rect roi(0, 0, 640, 480);
+                    depthRender.copyTo(image(roi));
+
+                    // convert and copy image representations for rendering
+                    cv::Mat leftImageToRender = 255*leftImage;
+                    cv::Mat rightImageToRender = 255*rightImage;
+                    cv::Mat leftImageU8, rightImageU8, leftImageBGR, rightImageBGR;
+                    leftImageToRender.convertTo(leftImageU8, CV_8UC1);
+                    rightImageToRender.convertTo(rightImageU8, CV_8UC1);
+                    cv::cvtColor(leftImageU8, leftImageBGR, cv::COLOR_GRAY2BGR);
+                    cv::cvtColor(rightImageU8, rightImageBGR, cv::COLOR_GRAY2BGR);
+                    roi = cv::Rect(0, 480, 640, 480);
+                    leftImageBGR.copyTo(image(roi));
+                    roi = cv::Rect(640, 480, 640, 480);
+                    rightImageBGR.copyTo(image(roi));
+
+                    // write to display
+                    cv::imshow("Depth Demo", image);
+                    cv::waitKey(2);
+                }
             }
+
             if (!imuQueue.empty()) {
                 imuQueue.pop();
             }
+
             // Wait for a small amount of time to avoid CPU overhaul
-            cv::waitKey(2);
+            this_thread::sleep_for(chrono::milliseconds(1));
         }
-        */
-        cout << "Displaying visualization results on the host is temporarily broken!" << endl;
+
         return 0;
     }
     else {
-        auto sender = ZMQImageSender("tcp://" + clientAddr + ":5555");
+        auto sender = ImageSender("tcp://" + clientAddr + ":5555");
 
         while (true) {
-            if (!depthImageQueue.empty()) {
-                auto depthResults = depthImageQueue.front();
-                depthImageQueue.pop();
-                //cv::Mat depthImageKey;
-                //cv::hconcat(depthImage, depthColorKey, depthImageKey);
+            if (!depthEstimateQueue.empty()) {
+                auto depthResults = depthEstimateQueue.front();
+                depthEstimateQueue.pop();
 
                 if(depthResults.size() > 0) {
                     cv::Mat leftImageToRender = 255*leftImage;
@@ -348,7 +292,7 @@ int main(int argc, char* argv[])
                     leftImageToRender.convertTo(leftImageU8, CV_8UC1);
                     rightImageToRender.convertTo(rightImageU8, CV_8UC1);
 
-                    sender.sendFullVisFrame(leftImageU8, rightImageU8, depthResults);
+                    sender.sendFullDepthFrame(leftImageU8, rightImageU8, depthResults);
                 }
             }
             if (!imuQueue.empty()) {

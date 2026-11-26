@@ -6,7 +6,7 @@
 #include <queue>
 #include <future>
 
-namespace SlamDemo {
+namespace Fenrir {
     using namespace std;
 
     cv::Mat adaptiveAccumulation(

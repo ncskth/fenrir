@@ -1,6 +1,6 @@
 #include <imageRepresentation.h>
 
-namespace SlamDemo {
+namespace Fenrir {
 
     using namespace std;
     using namespace std::chrono_literals;

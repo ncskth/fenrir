@@ -1,3 +1,5 @@
+#pragma once
+
 #include <opencv2/opencv.hpp>
 #include <dv-processing/core/core.hpp>
 
@@ -5,14 +7,13 @@
 #include <iostream>
 #include <future>
 
-namespace SlamDemo {
+namespace Fenrir {
     using namespace std;
 
     struct StereoBlockMatch {
         int x;
         int y;
         int pixelDisparity;
-        double correlation;
     };
 
     tuple<cv::Mat, cv::Mat> edgeKernels(int width);
@@ -21,10 +22,6 @@ namespace SlamDemo {
                               const cv::Mat &kernelx,
                               const cv::Mat &kernely,
                               int y, int x);
-    void drawSingleMatch(
-        const int searchBound,
-        const StereoBlockMatch& match,
-        cv::Mat& imageHSV);
 
     StereoBlockMatch matchSingleBlock(
         const double minVariance,
@@ -38,8 +35,7 @@ namespace SlamDemo {
         const cv::Mat &kernelx,
         const cv::Mat &kernely,
         const cv::Mat &combinedTSLeft,
-        const cv::Mat &combinedTSRight,
-        cv::Mat& imgHSV
+        const cv::Mat &combinedTSRight
     );
 
     vector<StereoBlockMatch> stereoBlockMatchingSequential(
@@ -55,8 +51,7 @@ namespace SlamDemo {
         const cv::Mat &combinedTSRight,
         const vector<tuple<int, int>> &centers,
         const int start,
-        const int end,
-        cv::Mat& imgHSV
+        const int end
     );
 
     vector<vector<StereoBlockMatch>> stereoBlockMatchingParallel(
@@ -71,14 +66,7 @@ namespace SlamDemo {
         const cv::Mat &kernely,
         const cv::Mat &combinedTSLeft,
         const cv::Mat &combinedTSRight,
-        const vector<tuple<int, int>> &centers,
-        cv::Mat& imgHSV
-    );
-
-    cv::Mat drawBlockMatchingResult(
-        const cv::Size resolution,
-        const int searchBound,
-        const vector<vector<StereoBlockMatch>> &sbmResult
+        const vector<tuple<int, int>> &centers
     );
 
     void depthEstimationLoop(
@@ -93,6 +81,6 @@ namespace SlamDemo {
         queue<vector<tuple<int, int>>> &incomingLeftEvents,
         cv::Mat &leftImage,
         cv::Mat &rightImage,
-        queue<vector<tuple<int, int, int>>> &outgoingImages
+        queue<vector<StereoBlockMatch>> &outgoingEstimates
     );
 }

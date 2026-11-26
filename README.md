@@ -28,12 +28,18 @@ Pass the flag `--no_filters` to see unfiltered events.
 From the project directory, simply run the executable:
 
 ```
-ncs@fenrir:~/Eben/fenrir$ build/SlamDemo --calibration-json fenrir_calibration.json --hot-pixels-dir hot_pixels_fenrir --sbm-num-threads 12  --max-events-in-buffer 24000
+ncs@fenrir:~/Eben/fenrir$ build/DepthDemo --calibration-json fenrir_calibration.json --hot-pixels-dir hot_pixels_fenrir --sbm-num-threads 12  --max-events-in-buffer 24000
 ```
 
 `--sbm-num-threads` is one of many adjustable flags, in this case controlling the number of threads dispatched for each stereo block matching operation.
 
 If the executable does not exist for some reason, rebuild it as follows.
+
+Really nice settings for mimir jr on hugin:
+
+```
+build/DepthDemo --calibration-json mimir_jr_calibration.json --hot-pixels-dir hot_pixels_fenrir --sbm-num-threads 28  --read-camera-ms 50 --max-events-in-buffer 84000 --sbm-min-variance 0.1 --sbm-half-block-width 12 --sbm-half-block-height 7 --sbm-min-correlation 0.7
+```
 
 ## Depth Perception Demo Rendered on Client
 
@@ -52,10 +58,10 @@ python scripts/fenrir_vis_client.py --calib_json fenrir_calibration.json --recor
 The video will be saved after you interrupt the application with `Ctrl+C`. Run the demo on the robot but now pointing it towards the local IP address of the client; if running from hugin:
 
 ```
-ncs@fenrir:~/Eben/fenrir$ build/SlamDemo --calibration-json fenrir_calibration.json --hot-pixels-dir hot_pixels_fenrir --sbm-num-threads 12  --max-events-in-buffer 24000 --client-addr 172.16.222.30
+ncs@fenrir:~/Eben/fenrir$ build/DepthDemo --calibration-json fenrir_calibration.json --hot-pixels-dir hot_pixels_fenrir --sbm-num-threads 12  --max-events-in-buffer 24000 --client-addr 172.16.222.30
 ```
 
-#### Starting the demo on the robot before opening the client listener will cause depth frames to backlog on the robot, which will look really weird when you run the visualization.
+#### Starting the demo on the robot before opening the client listener may cause depth frames to backlog on the robot, which will consume too much memory and look really weird when you run the visualization.
 
 ### Build Instructions
 
@@ -71,11 +77,25 @@ ncs@fenrir:~/Eben/fenrir$ cd build
 Configure cmake to build an optimized executable and run the compilation:
 
 ```
-ncs@fenrir:~/Eben/fenrir/build$ cmake -DCMAKE_BUILD_TYPE=Release ../
-ncs@fenrir:~/Eben/fenrir/build$ make
+ncs@fenrir:~/Eben/fenrir/build$ cmake -DCMAKE_BUILD_TYPE=Release ..
+ncs@fenrir:~/Eben/fenrir/build$ make -j8
 ```
 
-Now the executable `SlamDemo` should be present in the `build` directory.
+Now the executable `DepthDemo` should be present in the `build` directory.
+
+#### Troubleshooting
+
+On another system, I got the bizarre error
+
+```
+/usr/bin/x86_64-linux-gnu-ld.bfd: /usr/lib/x86_64-linux-gnu/libfmt.so.10.1.0: undefined reference to `__cxa_call_terminate@CXXABI_1.3.15'
+```
+
+Deepseek suggested that cmake needs to be explicitly pointed towards the right linker flags, and this fixed the issue:
+
+```
+cmake -DCMAKE_EXE_LINKER_FLAGS="-L/usr/lib/gcc/x86_64-linux-gnu/15" -DCMAKE_SHARED_LINKER_FLAGS="-L/usr/lib/gcc/x86_64-linux-gnu/15" DCMAKE_BUILD_TYPE=Release ..
+```
 
 ### Dependencies
 
@@ -83,10 +103,12 @@ The following should already be installed on the system, but if something breaks
 
 1) [cnpy](https://github.com/rogersce/cnpy)
 
-2) OpenCV
+2) libfmt (Might be installable by `apt` or may need to build from source)
 
-3) [dv-processing](https://dv-processing.inivation.com/master/installation.html)
+3) OpenCV (and `libopencv-viz-dev`)
 
-4) Boost (`sudo apt install libboost-all-dev`)
+4) [dv-processing](https://dv-processing.inivation.com/master/installation.html)
 
-5) ZeroMQ (`sudo apt install libzmq3-dev cppzmq-dev`)
+5) Boost (`sudo apt install libboost-all-dev`)
+
+6) ZeroMQ (`sudo apt install libzmq3-dev cppzmq-dev`)

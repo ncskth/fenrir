@@ -1,6 +1,6 @@
-#include <mapping.h>
+#include <disparityEstimation.h>
 
-namespace SlamDemo
+namespace Fenrir
 {
     using namespace std::chrono_literals;
     using namespace std;
@@ -19,7 +19,6 @@ namespace SlamDemo
         }
         cv::Mat kernely;
         cv::transpose(kernelx, kernely);
-        //cout << "KERNELS INITIALIZED!" << endl;
         return {kernelx, kernely};
     }
 
@@ -43,29 +42,6 @@ namespace SlamDemo
         return abs(dy) > 4.0 * abs(dx);
     }
 
-    void drawSingleMatch(
-        const int searchBound,
-        const StereoBlockMatch& match,
-        cv::Mat& imageHSV)
-    {
-        if (match.pixelDisparity > -1) {
-            double d = (double)match.pixelDisparity;
-            uint8_t hue = (uint8_t)(120. * d / searchBound);
-            if (hue > 120)
-            {
-                cout << "hue: " << (int)hue << endl;
-            }
-            uint8_t val = 255; //(uint8_t)(255.*sbmResult.correlation[i]);
-            for (int i = match.x - 1; i < match.x + 2; i++)
-            {
-                for (int j = match.y - 1; j < match.y + 2; j++)
-                {
-                    imageHSV.at<cv::Vec3b>(j, i) = cv::Vec3b(hue, 255, val);
-                }
-            }
-        }
-    }
-
     StereoBlockMatch matchSingleBlock(
         const double minVariance,
         const double minCorrelation,
@@ -78,8 +54,7 @@ namespace SlamDemo
         const cv::Mat &kernelx,
         const cv::Mat &kernely,
         const cv::Mat &combinedTSLeft,
-        const cv::Mat &combinedTSRight,
-        cv::Mat& imageHSV)
+        const cv::Mat &combinedTSRight)
     {
         const int blockWidth = 2 * halfBlockWidth + 1;
         const int blockHeight = 2 * halfBlockHeight + 1;
@@ -92,13 +67,13 @@ namespace SlamDemo
             leftX + blockWidth > combinedTSLeft.cols ||
             topY + blockHeight > combinedTSLeft.rows)
         {
-            return {centerX, centerY, -1, 0.};
+            return {centerX, centerY, -1};
         }
 
         // If the local neighborhood is a horizontal edge, stereo block matching will be unreliable
         if (isHorizontalEdge(combinedTSLeft, kernelx, kernely, centerX, centerY))
         {
-            return {centerX, centerY, -1, 0.};
+            return {centerX, centerY, -1};
         }
 
         // Access left patch directly from matrix data
@@ -122,13 +97,13 @@ namespace SlamDemo
 
         if (leftVariance < minVariance)
         {
-            return {centerX, centerY, -1, 0.};
+            return {centerX, centerY, -1};
         }
 
         const int maxDisparity = std::min(searchBound, leftX + 1);
         if (maxDisparity < 0)
         {
-            return {centerX, centerY, -1, 0.};
+            return {centerX, centerY, -1};
         }
 
         // Initial right patch at disparity 0
@@ -239,9 +214,7 @@ namespace SlamDemo
             }
         }
 
-        StereoBlockMatch result = {centerX, centerY, pixelDisparity, bestCorrelation};
-
-        //drawSingleMatch(searchBound, result, imageHSV);
+        StereoBlockMatch result = {centerX, centerY, pixelDisparity};
 
         return result;
     }
@@ -259,8 +232,7 @@ namespace SlamDemo
         const cv::Mat &combinedTSRight,
         const vector<tuple<int, int>> &centers,
         const int start,
-        const int end,
-        cv::Mat &imageHSV)
+        const int end)
     {
         int numBlocks = end - start;
         vector<StereoBlockMatch> matches;
@@ -280,8 +252,7 @@ namespace SlamDemo
                 kernelx,
                 kernely,
                 combinedTSLeft,
-                combinedTSRight,
-                imageHSV));
+                combinedTSRight));
         }
 
         return matches;
@@ -299,8 +270,7 @@ namespace SlamDemo
         const cv::Mat &kernely,
         const cv::Mat &combinedTSLeft,
         const cv::Mat &combinedTSRight,
-        const vector<tuple<int, int>> &centers,
-        cv::Mat &imageHSV)
+        const vector<tuple<int, int>> &centers)
     {
         size_t numBlocks = centers.size();
         vector<vector<StereoBlockMatch>> matches;
@@ -328,8 +298,7 @@ namespace SlamDemo
                                           combinedTSRight,
                                           centers,
                                           start,
-                                          end,
-                                          imageHSV); }));
+                                          end); }));
         }
 
         for (int i = 0; i < numThreads; i++)
@@ -339,40 +308,6 @@ namespace SlamDemo
         }
 
         return matches;
-    }
-
-    cv::Mat drawBlockMatchingResult(
-        const cv::Size resolution,
-        const int searchBound,
-        const vector<vector<StereoBlockMatch>> &sbmResult)
-    {
-
-        // render horizontal and vertical depth estimations separately
-        // use hue to indicate disparity, value to indicate confidence
-        cv::Mat visHSV = cv::Mat::zeros(resolution, CV_8UC3);
-        cv::Mat visBGR;
-        for (auto matches : sbmResult)
-        {
-            for (auto match : matches)
-            {
-                if (match.pixelDisparity > -1)
-                {
-                    double d = (double)match.pixelDisparity;
-                    uint8_t hue = (uint8_t)(120. * d / searchBound);
-                    uint8_t val = 255; //(uint8_t)(255.*sbmResult.correlation[i]);
-                    for (int i = match.x - 1; i < match.x + 2; i++)
-                    {
-                        for (int j = match.y - 1; j < match.y + 2; j++)
-                        {
-                            visHSV.at<cv::Vec3b>(j, i) = cv::Vec3b(hue, 255, val);
-                        }
-                    }
-                }
-            }
-        }
-        cv::cvtColor(visHSV, visBGR, cv::COLOR_HSV2BGR);
-
-        return visBGR;
     }
 
     void depthEstimationLoop(
@@ -387,7 +322,7 @@ namespace SlamDemo
         queue<vector<tuple<int, int>>> &incomingLeftEvents,
         cv::Mat &leftImage,
         cv::Mat &rightImage,
-        queue<vector<tuple<int, int, int>>> &outgoingImages)
+        queue<vector<StereoBlockMatch>> &outgoingEstimates)
     {
         auto kernels = edgeKernels(min(2*halfBlockWidth, 2*halfBlockHeight));
         cv::Mat kernelx = get<0>(kernels);
@@ -399,9 +334,7 @@ namespace SlamDemo
             {
                 vector<tuple<int, int>> centers = incomingLeftEvents.front();
                 incomingLeftEvents.pop();
-
-                cv::Mat visHSV = cv::Mat::zeros(resolution, CV_8UC3);
-                cv::Mat visBGR;
+                int numEvents = incomingLeftEvents.size();
 
                 vector<vector<StereoBlockMatch>> matchResult = stereoBlockMatchingParallel(
                     numThreads,
@@ -415,25 +348,19 @@ namespace SlamDemo
                     ref(kernely),
                     ref(leftImage),
                     ref(rightImage),
-                    ref(centers),
-                    ref(visHSV));
+                    ref(centers));
 
-                //cv::Mat vis = drawBlockMatchingResult(resolution, searchBound, matchResult);
-                //cv::cvtColor(visHSV, visBGR, cv::COLOR_HSV2BGR);
-                vector<tuple<int, int, int>> result;
+                vector<StereoBlockMatch> result;
+                result.reserve(numEvents);
                 for(vector<StereoBlockMatch> outer : matchResult) {
                     for(StereoBlockMatch match : outer) {
                         if(match.pixelDisparity > -1) {
-                            result.push_back({
-                                match.x,
-                                match.y,
-                                match.pixelDisparity
-                            });
+                            result.push_back(match);
                         }
                     }
                 }
 
-                outgoingImages.push(result);
+                outgoingEstimates.push(result);
             }
             else
             {

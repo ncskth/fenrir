@@ -3,7 +3,7 @@
     "configurePresets": [
         {
             "name": "release",
-            "displayName": "GCC 13.3.0 x86_64-linux-gnu",
+            "displayName": "release",
             "description": "Using compilers: C = /usr/bin/gcc, CXX = /usr/bin/g++",
             "generator": "Unix Makefiles",
             "binaryDir": "${sourceDir}/build/${presetName}",
@@ -16,27 +16,17 @@
         },
         {
             "name": "debug",
-            "displayName": "GCC 13.3.0 x86_64-linux-gnu",
+            "displayName": "debug",
             "description": "Using compilers: C = /usr/bin/gcc, CXX = /usr/bin/g++",
             "generator": "Unix Makefiles",
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/${presetName}",
-                "CMAKE_C_COMPILER": "/usr/bin/gcc",
-                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
+                "CMAKE_C_COMPILER": "/usr/bin/gcc-15",
+                "CMAKE_CXX_COMPILER": "/usr/bin/g++-15",
+                "CMAKE_EXE_LINKER_FLAGS": "-L/usr/lib/gcc/x86_64-linux-gnu/15",
+                "CMAKE_SHARED_LINKER_FLAGS": "-L/usr/lib/gcc/x86_64-linux-gnu/15",
                 "CMAKE_BUILD_TYPE": "Debug"
-            }
-        },
-        {
-            "name": "Configure preset using toolchain file",
-            "displayName": "Configure preset using toolchain file",
-            "description": "Sets Ninja generator, build and install directory",
-            "generator": "Ninja",
-            "binaryDir": "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_TOOLCHAIN_FILE": "",
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}"
             }
         }
     ]

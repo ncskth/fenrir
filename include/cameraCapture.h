@@ -16,7 +16,7 @@
 
 #include <cnpy.h>
 
-namespace SlamDemo {
+namespace Fenrir {
     using namespace std;
 
     void updateImageAndTimestamps(
