@@ -38,7 +38,7 @@ If the executable does not exist for some reason, rebuild it as follows.
 Really nice settings for mimir jr on hugin:
 
 ```
-build/DepthDemo --calibration-json mimir_jr_calibration.json --hot-pixels-dir hot_pixels_fenrir --sbm-num-threads 28  --read-camera-ms 50 --max-events-in-buffer 84000 --sbm-min-variance 0.1 --sbm-half-block-width 12 --sbm-half-block-height 7 --sbm-min-correlation 0.7
+build/DepthDemo --calibration-json mimir_jr_calibration.json --hot-pixels-dir hot_pixels_fenrir --sbm-num-threads 28  --read-camera-ms 100 --max-events-in-buffer 84000 --sbm-min-variance 0.05 --sbm-half-block-width 20 --sbm-half-block-height 10 --sbm-min-correlation 0.7
 ```
 
 ## Depth Perception Demo Rendered on Client
@@ -61,7 +61,17 @@ The video will be saved after you interrupt the application with `Ctrl+C`. Run t
 ncs@fenrir:~/Eben/fenrir$ build/DepthDemo --calibration-json fenrir_calibration.json --hot-pixels-dir hot_pixels_fenrir --sbm-num-threads 12  --max-events-in-buffer 24000 --client-addr 172.16.222.30
 ```
 
-#### Starting the demo on the robot before opening the client listener may cause depth frames to backlog on the robot, which will consume too much memory and look really weird when you run the visualization.
+#### Troubleshooting
+
+Starting the demo on the robot before opening the client listener may cause depth frames to backlog on the robot, which will consume too much memory and look really weird when you run the visualization.
+
+Trying to run the C++ visualization client on gnome, I found that you first have to tell GDK what platform it's on (run the following command before starting the visualization client):
+
+```
+export GDK_BACKEND=x11
+```
+
+Also, the visualization client may crash immediately if you run it from the vscode terminal.
 
 ### Build Instructions
 

@@ -4,3 +4,4 @@ __pycache__
 grid_points
 build
 .vscode
+out

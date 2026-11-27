@@ -113,6 +113,42 @@ namespace Fenrir {
         }
     }
 
+    vector<tuple<int, int>> updateImageAndTimestampsReturnEvents(
+        const double decay,
+        const double gain,
+        const int width,
+        const cv::Mat& undistortRectifyMap1,
+        const cv::Mat& undistortRectifyMap2,
+        const dv::EventStore& events,
+        const int start,
+        const int stop,
+        cv::Mat& image,
+        vector<int64_t>& timestamps
+    ) {
+        vector<tuple<int, int>> rectifiedEvents;
+        rectifiedEvents.reserve(max(0, stop - start));
+
+        for(int i = start; i < stop; i++) {
+            auto ev = events[i];
+
+            int x = undistortRectifyMap1.at<int>(ev.y(), ev.x());
+            int y = undistortRectifyMap2.at<int>(ev.y(), ev.x());
+            rectifiedEvents.push_back({x, y});
+
+            double val = image.at<double>(y, x);
+
+            if((ev.polarity() && val < 0.9) || (!ev.polarity() && val > 0.1)) {
+                double diff = ev.polarity() ? gain : -gain;
+                // timestamps are in microseconds, decay is in milliseconds
+                double decayed = exp(1e-3*( timestamps[width*y + x] - ev.timestamp() )/decay) * (val - 0.5);
+                image.at<double>(y, x) = decayed + diff + 0.5;
+                timestamps[width*y + x] = ev.timestamp();
+            }
+        }
+
+        return rectifiedEvents;
+    }
+
     void rightCameraCapture(
         const cv::Size resolution,
         const string serial,
@@ -307,7 +343,7 @@ namespace Fenrir {
                 //maskFilter.accept(*raw);
                 //const auto masked = maskFilter.generateEvents();
                 auto future = async(launch::async, [&] {
-                    updateImageAndTimestamps(
+                    return updateImageAndTimestampsReturnEvents(
                         accumulatorTimeConstant,
                         accumulatorGain,
                         resolution.width,
@@ -319,7 +355,8 @@ namespace Fenrir {
                         image,
                         timestamps);
                 });
-                updateImageAndTimestamps(
+
+                auto firstRectifiedEvents = updateImageAndTimestampsReturnEvents(
                     accumulatorTimeConstant,
                     accumulatorGain,
                     resolution.width,
@@ -330,13 +367,16 @@ namespace Fenrir {
                     (int)(raw->size()),
                     image,
                     timestamps);
-                future.get();
-                //eventBuffer.add(masked);
-                //accumulator.accept(masked);
-                for(dv::Event ev : *raw) {
-                    //cout << "Trying to append to event buffer" << endl;
-                    eventBuffer[bufferIndex] = {(int)ev.x(), (int)ev.y()};
-                    //cout << "Appended to event buffer" << endl;
+
+                auto lastRectifiedEvents = future.get();
+
+                for(auto ev : firstRectifiedEvents) {
+                    eventBuffer[bufferIndex] = ev;
+                    bufferIndex++;
+                    bufferIndex %= maxEventsInBuffer;
+                }
+                for(auto ev : firstRectifiedEvents) {
+                    eventBuffer[bufferIndex] = ev;
                     bufferIndex++;
                     bufferIndex %= maxEventsInBuffer;
                 }

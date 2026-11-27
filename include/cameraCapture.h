@@ -32,6 +32,19 @@ namespace Fenrir {
         vector<int64_t>& timestamps
     );
 
+    vector<tuple<int, int>> updateImageAndTimestampsReturnEvents(
+        const double decay,
+        const double gain,
+        const int width,
+        const cv::Mat& undistortRectifyMap1,
+        const cv::Mat& undistortRectifyMap2,
+        const dv::EventStore& events,
+        const int start,
+        const int stop,
+        cv::Mat& image,
+        vector<int64_t>& timestamps
+    );
+
     void rightCameraCapture(
         const cv::Size resolution,
         const string serial,

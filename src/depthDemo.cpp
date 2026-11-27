@@ -242,29 +242,27 @@ int main(int argc, char* argv[])
                 auto depthResults = depthEstimateQueue.front();
                 depthEstimateQueue.pop();
 
-                if(depthResults.size() > 0) {
-                    // render depth estimation results
-                    cv::Mat depthRender = drawDepthFrame(depthResults, sbmSearchBound);
-                    cv::Rect roi(0, 0, 640, 480);
-                    depthRender.copyTo(image(roi));
+                // render depth estimation results
+                cv::Mat depthRender = drawDepthFrame(depthResults, sbmSearchBound);
+                cv::Rect roi(0, 0, 640, 480);
+                depthRender.copyTo(image(roi));
 
-                    // convert and copy image representations for rendering
-                    cv::Mat leftImageToRender = 255*leftImage;
-                    cv::Mat rightImageToRender = 255*rightImage;
-                    cv::Mat leftImageU8, rightImageU8, leftImageBGR, rightImageBGR;
-                    leftImageToRender.convertTo(leftImageU8, CV_8UC1);
-                    rightImageToRender.convertTo(rightImageU8, CV_8UC1);
-                    cv::cvtColor(leftImageU8, leftImageBGR, cv::COLOR_GRAY2BGR);
-                    cv::cvtColor(rightImageU8, rightImageBGR, cv::COLOR_GRAY2BGR);
-                    roi = cv::Rect(0, 480, 640, 480);
-                    leftImageBGR.copyTo(image(roi));
-                    roi = cv::Rect(640, 480, 640, 480);
-                    rightImageBGR.copyTo(image(roi));
+                // convert and copy image representations for rendering
+                cv::Mat leftImageToRender = 255*leftImage;
+                cv::Mat rightImageToRender = 255*rightImage;
+                cv::Mat leftImageU8, rightImageU8, leftImageBGR, rightImageBGR;
+                leftImageToRender.convertTo(leftImageU8, CV_8UC1);
+                rightImageToRender.convertTo(rightImageU8, CV_8UC1);
+                cv::cvtColor(leftImageU8, leftImageBGR, cv::COLOR_GRAY2BGR);
+                cv::cvtColor(rightImageU8, rightImageBGR, cv::COLOR_GRAY2BGR);
+                roi = cv::Rect(0, 480, 640, 480);
+                leftImageBGR.copyTo(image(roi));
+                roi = cv::Rect(640, 480, 640, 480);
+                rightImageBGR.copyTo(image(roi));
 
-                    // write to display
-                    cv::imshow("Depth Demo", image);
-                    cv::waitKey(2);
-                }
+                // write to display
+                cv::imshow("Depth Demo", image);
+                cv::waitKey(2);
             }
 
             if (!imuQueue.empty()) {
@@ -285,15 +283,13 @@ int main(int argc, char* argv[])
                 auto depthResults = depthEstimateQueue.front();
                 depthEstimateQueue.pop();
 
-                if(depthResults.size() > 0) {
-                    cv::Mat leftImageToRender = 255*leftImage;
-                    cv::Mat rightImageToRender = 255*rightImage;
-                    cv::Mat leftImageU8, rightImageU8;
-                    leftImageToRender.convertTo(leftImageU8, CV_8UC1);
-                    rightImageToRender.convertTo(rightImageU8, CV_8UC1);
+                cv::Mat leftImageToRender = 255*leftImage;
+                cv::Mat rightImageToRender = 255*rightImage;
+                cv::Mat leftImageU8, rightImageU8;
+                leftImageToRender.convertTo(leftImageU8, CV_8UC1);
+                rightImageToRender.convertTo(rightImageU8, CV_8UC1);
 
-                    sender.sendFullDepthFrame(leftImageU8, rightImageU8, depthResults);
-                }
+                sender.sendFullDepthFrame(leftImageU8, rightImageU8, depthResults);
             }
             if (!imuQueue.empty()) {
                 imuQueue.pop();

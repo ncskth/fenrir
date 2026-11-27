@@ -115,7 +115,7 @@ cv::Mat receiveAndUpdateFullFrame(zmq::socket_t& sock,
     return image;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
 
     namespace po = boost::program_options;
 
@@ -131,10 +131,14 @@ int main() {
         ("fps", po::value<int>(&fps)->default_value(10), "Default frame rate of recorded video");
         ("sbm-search-bound", po::value<int>(&sbmSearchBound)->default_value(100), "Matching a block from the left camera will check at most this many blocks from the right camera.");
 
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::notify(vm);
+
     bool recordVideo = !videoName.empty();
 
     if (calibJSONPath.empty()) {
-        cerr << "error: --calib_json is required\n";
+        cerr << "error: --calibration-json is required\n";
         return 1;
     }
 
@@ -173,8 +177,10 @@ int main() {
     zmq::context_t ctx(1);
     zmq::socket_t sock(ctx, zmq::socket_type::pull);
     sock.bind("tcp://*:5555");
+    cout << "INTIALIZED SOCKET" << endl;
 
     cv::namedWindow("Depth Demo", cv::WINDOW_NORMAL);
+    cout << "INTIALIZED WINDOW" << endl;
 
     // use rectified camera matrix to compute disparity-to-depth conversion rate
     cv::Mat depthColorKey = drawDepthColorKey(Q, sbmSearchBound);
