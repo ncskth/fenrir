@@ -9,16 +9,18 @@ namespace Fenrir {
 
     using namespace std;
 
+    static constexpr uint8_t TAG_LEFT_EVENTS = 0;
+    static constexpr uint8_t TAG_RIGHT_EVENTS = 1;
+    static constexpr uint8_t TAG_LEFT_IMAGE = 2;
+    static constexpr uint8_t TAG_RIGHT_IMAGE = 3;
+    static constexpr uint8_t TAG_DISPARITY_EVENTS = 4;
+
     class ImageSender {
         public:
             ImageSender(const string& addr) : ctx_(1), sock_(ctx_, zmq::socket_type::push) {
                 // e.g. "tcp://*:5555"
                 sock_.connect(addr);
             }
-
-            static constexpr uint8_t TAG_LEFT  = 0;
-            static constexpr uint8_t TAG_RIGHT  = 1;
-            static constexpr uint8_t TAG_TRIPLES = 2;
 
             void sendOneImage(const cv::Mat& img, bool isLeft) {
                 // Ensure contiguous memory so we can send img.data as one block
@@ -37,7 +39,7 @@ namespace Fenrir {
                 memcpy((char*)meta.data() + 12, &bytes, 8);
 
                 zmq::message_t tag(sizeof(uint8_t));
-                *static_cast<uint8_t*>(tag.data()) = isLeft ? TAG_LEFT : TAG_RIGHT;
+                *static_cast<uint8_t*>(tag.data()) = isLeft ? TAG_LEFT_IMAGE : TAG_RIGHT_IMAGE;
                 sock_.send(tag, zmq::send_flags::sndmore);
 
                 sock_.send(meta, zmq::send_flags::sndmore);
@@ -47,9 +49,9 @@ namespace Fenrir {
                 sock_.send(pixeldata, zmq::send_flags::none);
             }
 
-            void sendEstimates(const vector<StereoBlockMatch>& estimates) {
+            void sendDisparity(const vector<StereoBlockMatch>& estimates) {
                 zmq::message_t tag(sizeof(uint8_t));
-                *static_cast<uint8_t*>(tag.data()) = TAG_TRIPLES;
+                *static_cast<uint8_t*>(tag.data()) = TAG_DISPARITY_EVENTS;
                 sock_.send(tag, zmq::send_flags::sndmore);
 
                 uint64_t count = estimates.size();
@@ -81,7 +83,7 @@ namespace Fenrir {
                 const vector<StereoBlockMatch>& depthResults) {
                     sendOneImage(leftImg, true);
                     sendOneImage(rightImg, false);
-                    sendEstimates(depthResults);
+                    sendDisparity(depthResults);
             }
 
         private:

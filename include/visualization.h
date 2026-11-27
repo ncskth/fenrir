@@ -33,8 +33,6 @@ namespace Fenrir {
 
     int cvTypeFromDepth(CvDepth d);
 
-    cv::Mat frameToMat(const string& metaBytes, const string& dataBytes);
-
     cv::Mat drawDepthFrame(const vector<StereoBlockMatch>& disparityMeasurements,
                         int searchBound);
 

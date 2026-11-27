@@ -24,33 +24,6 @@ namespace Fenrir {
         throw runtime_error("bad depth");
     }
 
-    // ---------------------------------------------------------------------------
-    // frame_to_mat equivalent
-    // ---------------------------------------------------------------------------
-    cv::Mat frameToMat(const string& metaBytes, const string& dataBytes) {
-        if (metaBytes.size() < sizeof(int) * 3 + sizeof(int64_t)) {
-            throw runtime_error("metadata too short");
-        }
-        int32_t rows, cols, typeCode;
-        int64_t nbytes;
-        memcpy(&rows,     metaBytes.data() + 0,                        sizeof(int32_t));
-        memcpy(&cols,     metaBytes.data() + sizeof(int32_t),          sizeof(int32_t));
-        memcpy(&typeCode, metaBytes.data() + 2 * sizeof(int32_t),      sizeof(int32_t));
-        memcpy(&nbytes,   metaBytes.data() + 3 * sizeof(int32_t),      sizeof(int64_t));
-
-        auto [depth, channels] = decodeCvType(typeCode);
-        int cvType = CV_MAKETYPE(cvTypeFromDepth(depth), channels);
-
-        // Copy data into a contiguous buffer owned by cv::Mat (a shallow wrapper
-        // pointing at `dataBytes` would not be safe; the recv buffer is transient).
-        cv::Mat mat(rows, cols, cvType);
-        if (static_cast<int64_t>(mat.total() * mat.elemSize()) != nbytes) {
-            throw runtime_error("frame size mismatch");
-        }
-        memcpy(mat.data, dataBytes.data(), static_cast<size_t>(nbytes));
-        return mat;
-    }
-
     cv::Mat drawDepthFrame(const vector<StereoBlockMatch>& disparityMeasurements,
                         int searchBound) {
         const int H = 480, W = 640;

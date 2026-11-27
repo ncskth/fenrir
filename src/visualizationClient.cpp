@@ -6,26 +6,48 @@
 #include <zmq.hpp>
 
 #include <visualization.h>
+#include <imageSender.hpp>
 
 using namespace std;
 using namespace Fenrir;
 
 struct RecvResult {
-    std::string kind;
+    uint8_t tag;
     cv::Mat mat;                        // for 'left' / 'right'
     std::vector<StereoBlockMatch> triples;  // for 'triples'
 };
 
-RecvResult recvMessage(zmq::socket_t& sock) {
-    const string TAG_LEFT    = string("\x00", 1);
-    const string TAG_RIGHT   = string("\x01", 1);
-    const string TAG_TRIPLES = string("\x02", 1);
-
-    zmq::message_t tagMsg;
-    if (!sock.recv(tagMsg, zmq::recv_flags::none)) {
-        throw runtime_error("recv failed");
+// ---------------------------------------------------------------------------
+// frame_to_mat equivalent
+// ---------------------------------------------------------------------------
+cv::Mat frameToMat(const string& metaBytes, const string& dataBytes) {
+    if (metaBytes.size() < sizeof(int) * 3 + sizeof(int64_t)) {
+        throw runtime_error("metadata too short");
     }
-    string tag(static_cast<const char*>(tagMsg.data()), tagMsg.size());
+    int32_t rows, cols, typeCode;
+    int64_t nbytes;
+    memcpy(&rows,     metaBytes.data() + 0,                        sizeof(int32_t));
+    memcpy(&cols,     metaBytes.data() + sizeof(int32_t),          sizeof(int32_t));
+    memcpy(&typeCode, metaBytes.data() + 2 * sizeof(int32_t),      sizeof(int32_t));
+    memcpy(&nbytes,   metaBytes.data() + 3 * sizeof(int32_t),      sizeof(int64_t));
+
+    auto [depth, channels] = decodeCvType(typeCode);
+    int cvType = CV_MAKETYPE(cvTypeFromDepth(depth), channels);
+
+    // Copy data into a contiguous buffer owned by cv::Mat (a shallow wrapper
+    // pointing at `dataBytes` would not be safe; the recv buffer is transient).
+    cv::Mat mat(rows, cols, cvType);
+    if (static_cast<int64_t>(mat.total() * mat.elemSize()) != nbytes) {
+        throw runtime_error("frame size mismatch");
+    }
+    memcpy(mat.data, dataBytes.data(), static_cast<size_t>(nbytes));
+    return mat;
+}
+
+RecvResult recvMessage(zmq::socket_t& sock) {
+    zmq::message_t tagMsg;
+    sock.recv(tagMsg, zmq::recv_flags::none);
+    uint8_t tag = *static_cast<const uint8_t*>(tagMsg.data());
 
     RecvResult out;
 
@@ -35,31 +57,31 @@ RecvResult recvMessage(zmq::socket_t& sock) {
         s.assign(static_cast<const char*>(m.data()), m.size());
     };
 
-    if (tag == TAG_LEFT) {
+    if (tag == TAG_LEFT_IMAGE) {
         string meta, data;
         recvStr(meta);
         recvStr(data);
-        out.kind = "left";
+        out.tag = tag;
         out.mat  = frameToMat(meta, data);
         return out;
     }
 
-    if (tag == TAG_RIGHT) {
+    if (tag == TAG_RIGHT_IMAGE) {
         string meta, data;
         recvStr(meta);
         recvStr(data);
-        out.kind = "right";
+        out.tag = tag;
         out.mat  = frameToMat(meta, data);
         return out;
     }
 
-    if (tag == TAG_TRIPLES) {
+    if (tag == TAG_DISPARITY_EVENTS) {
         string countBytes;
         recvStr(countBytes);
         uint64_t count = 0;
         memcpy(&count, countBytes.data(), sizeof(uint64_t));
 
-        out.kind = "triples";
+        out.tag = tag;
         out.triples.reserve(static_cast<size_t>(count));
 
         for (uint64_t i = 0; i < count; ++i) {
@@ -80,11 +102,11 @@ RecvResult recvMessage(zmq::socket_t& sock) {
 // receive_and_update_full_frame
 // ---------------------------------------------------------------------------
 cv::Mat receiveAndUpdateFullFrame(zmq::socket_t& sock,
-                                cv::Mat& image,
-                                int searchBound) {
+                                  cv::Mat& image,
+                                  int searchBound) {
     for (int i = 0; i < 3; ++i) {
         RecvResult r = recvMessage(sock);
-        if (r.kind == "left") {
+        if (r.tag == TAG_LEFT_IMAGE) {
             cv::Mat three;
             cv::cvtColor(r.mat, three, cv::COLOR_GRAY2BGR);
             cv::Rect roi(0, 480, 640, 480);
@@ -95,7 +117,7 @@ cv::Mat receiveAndUpdateFullFrame(zmq::socket_t& sock,
             } else {
                 three.copyTo(image(roi));
             }
-        } else if (r.kind == "right") {
+        } else if (r.tag == TAG_RIGHT_IMAGE) {
             cv::Mat three;
             cv::cvtColor(r.mat, three, cv::COLOR_GRAY2BGR);
             cv::Rect roi(640, 480, 640, 480);
