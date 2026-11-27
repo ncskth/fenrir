@@ -20,8 +20,9 @@
 #include <imageRepresentation.h>
 #include <tracking.h>
 #include <disparityEstimation.h>
-#include <imageSender.hpp>
+#include <sender.hpp>
 #include <visualization.h>
+#include <calibData.h>
 
 using namespace Fenrir;
 
@@ -95,74 +96,24 @@ int main(int argc, char* argv[])
     cout << "SBM number of threads: " << sbmNumThreads << endl;
     cout << "SBM search bound: " << sbmSearchBound << endl;
 
-    auto calibration = dv::camera::CalibrationSet::LoadFromFile(calibJSONPath);
+    CalibData calibData = loadCalibData(calibJSONPath);
 
-    // Get calibration data
-    auto leftCameraCalib = calibration.getCameraCalibration("C0").value();
-    auto rightCameraCalib = calibration.getCameraCalibration("C1").value();
-    const cv::Size resolution = leftCameraCalib.resolution;
-
-    cv::Mat camMatL_mat = cv::Mat(leftCameraCalib.getCameraMatrix());  // CV_32F
-    cv::Mat camMatR_mat = cv::Mat(rightCameraCalib.getCameraMatrix()); // CV_32F
-
-    cv::Mat distCoeffsL_mat = cv::Mat(leftCameraCalib.distortion);     // CV_32F
-    cv::Mat distCoeffsR_mat = cv::Mat(rightCameraCalib.distortion);    // CV_32F
-
-    auto Reigen = rightCameraCalib.transformationToC0.getRotationMatrix();
-    auto Teigen = rightCameraCalib.transformationToC0.getTranslation();
-    cv::Mat R, T;
-    cv::eigen2cv(Reigen, R);
-    cv::eigen2cv(Teigen, T);
-
-    // Convert everything to CV_64F for stereoRectify
-    camMatL_mat.convertTo(camMatL_mat, CV_64F);
-    camMatR_mat.convertTo(camMatR_mat, CV_64F);
-    distCoeffsL_mat.convertTo(distCoeffsL_mat, CV_64F);
-    distCoeffsR_mat.convertTo(distCoeffsR_mat, CV_64F);
-    R.convertTo(R, CV_64F);
-    T.convertTo(T, CV_64F);
-
-    // Stereo rectify (CV_64F)
-    cv::Mat R1, R2, P1, P2, Q;
-    stereoRectify(camMatL_mat, distCoeffsL_mat, camMatR_mat, distCoeffsR_mat,
-                  resolution, R, T, R1, R2, P1, P2, Q);
-
-    // Convert back to CV_32F for initUndistortRectifyMap
-    cv::Mat camMatL_32, camMatR_32, distCoeffsL_32, distCoeffsR_32;
-    cv::Mat R1_32, R2_32, P1_32, P2_32;
-
-    camMatL_mat.convertTo(camMatL_32, CV_32F);
-    camMatR_mat.convertTo(camMatR_32, CV_32F);
-    distCoeffsL_mat.convertTo(distCoeffsL_32, CV_32F);
-    distCoeffsR_mat.convertTo(distCoeffsR_32, CV_32F);
-    R1.convertTo(R1_32, CV_32F);
-    R2.convertTo(R2_32, CV_32F);
-    P1.convertTo(P1_32, CV_32F);
-    P2.convertTo(P2_32, CV_32F);
-
-    // Generate maps (CV_32F)
-    cv::Mat mapL1, mapL2, mapR1, mapR2;
-    initUndistortRectifyMap(camMatL_32, distCoeffsL_32, R1_32, P1_32,
-                            resolution, CV_32FC1, mapL1, mapL2);
-    initUndistortRectifyMap(camMatR_32, distCoeffsR_32, R2_32, P2_32,
-                            resolution, CV_32FC1, mapR1, mapR2);
-
+    /*
     auto imuCalib = calibration.getImuCalibration("S0").value();
     cv::Point3f gyroBias = imuCalib.omegaOffsetAvg;
     cv::Point3f accelBias = imuCalib.accOffsetAvg;
-
-    cv::Mat depthColorKey = drawDepthColorKey(ref(Q), sbmSearchBound);
+    */
 
     queue<vector<tuple<int, int>>> leftEventsToMap;
     queue<vector<dv::IMU>> imuQueue;
     queue<cv::Mat> velocityVisQueue;
     queue<vector<StereoBlockMatch>> depthEstimateQueue;
 
-    cv::Mat leftImage = 0.5*cv::Mat::ones(resolution.height, resolution.width, CV_64FC1);
-    cv::Mat rightImage = 0.5*cv::Mat::ones(resolution.height, resolution.width, CV_64FC1);
-    vector<int64_t> leftTimestamps(resolution.area());
-    vector<int64_t> rightTimestamps(resolution.area());
-    for(int i = 0; i < resolution.area(); i++) {
+    cv::Mat leftImage = 0.5*cv::Mat::ones(calibData.height, calibData.width, CV_64FC1);
+    cv::Mat rightImage = 0.5*cv::Mat::ones(calibData.height, calibData.width, CV_64FC1);
+    vector<int64_t> leftTimestamps(calibData.resolution.area());
+    vector<int64_t> rightTimestamps(calibData.resolution.area());
+    for(int i = 0; i < calibData.resolution.area(); i++) {
         leftTimestamps[i] = 0;
         rightTimestamps[i] = 0;
     }
@@ -171,8 +122,8 @@ int main(int argc, char* argv[])
 
     thread leftCameraCaptureThread(
         &leftCameraCapture,
-        resolution,
-        leftCameraCalib.name,
+        calibData.resolution,
+        calibData.leftCameraName,
         hotPixelsDir + "/hot_pixels_left_x.npy",
         hotPixelsDir + "/hot_pixels_left_y.npy",
         highPassMicroseconds,
@@ -180,8 +131,8 @@ int main(int argc, char* argv[])
         eventAccumulatorGain,
         readCameraMilliseconds,
         maxEventsInBuffer,
-        mapL1,
-        mapL2,
+        calibData.leftUndistortRectifyMap1,
+        calibData.leftUndistortRectifyMap2,
         ref(leftEventsToMap),
         ref(leftImage),
         ref(leftTimestamps),
@@ -189,16 +140,16 @@ int main(int argc, char* argv[])
     );
     thread rightCameraCaptureThread(
         &rightCameraCapture,
-        resolution,
-        rightCameraCalib.name,
+        calibData.resolution,
+        calibData.rightCameraName,
         hotPixelsDir + "/hot_pixels_right_x.npy",
         hotPixelsDir + "/hot_pixels_right_y.npy",
         highPassMicroseconds,
         eventAccumulatorMilliseconds,
         eventAccumulatorGain,
         readCameraMilliseconds,
-        mapR1,
-        mapR2,
+        calibData.rightUndistortRectifyMap1,
+        calibData.rightUndistortRectifyMap2,
         ref(rightImage),
         ref(rightTimestamps)
     );
@@ -216,7 +167,7 @@ int main(int argc, char* argv[])
         sbmNumThreads,
         minBlockVariance,
         minBlockCorrelation,
-        resolution,
+        calibData.resolution,
         sbmHalfBlockWidth,
         sbmHalfBlockHeight,
         sbmEventDownsampling,
@@ -231,7 +182,11 @@ int main(int argc, char* argv[])
 
         cv::namedWindow("Depth Demo", cv::WINDOW_NORMAL);
 
-        cv::Mat depthColorKey = drawDepthColorKey(ref(Q), sbmSearchBound);
+        cv::Mat depthColorKey = drawDepthColorKey(
+            calibData.focalLength,
+            calibData.baseline,
+            sbmSearchBound
+        );
         cv::Mat image = cv::Mat::zeros(960, 1280, CV_8UC3);
         // Place the color key at [0:480, 640:840].
         depthColorKey.copyTo(image(cv::Rect(640, 0, depthColorKey.cols, depthColorKey.rows)));
@@ -242,23 +197,19 @@ int main(int argc, char* argv[])
                 auto depthResults = depthEstimateQueue.front();
                 depthEstimateQueue.pop();
 
-                // render depth estimation results
-                cv::Mat depthRender = drawDepthFrame(depthResults, sbmSearchBound);
-                cv::Rect roi(0, 0, 640, 480);
-                depthRender.copyTo(image(roi));
-
-                // convert and copy image representations for rendering
                 cv::Mat leftImageToRender = 255*leftImage;
                 cv::Mat rightImageToRender = 255*rightImage;
-                cv::Mat leftImageU8, rightImageU8, leftImageBGR, rightImageBGR;
+                cv::Mat leftImageU8, rightImageU8;
                 leftImageToRender.convertTo(leftImageU8, CV_8UC1);
                 rightImageToRender.convertTo(rightImageU8, CV_8UC1);
-                cv::cvtColor(leftImageU8, leftImageBGR, cv::COLOR_GRAY2BGR);
-                cv::cvtColor(rightImageU8, rightImageBGR, cv::COLOR_GRAY2BGR);
-                roi = cv::Rect(0, 480, 640, 480);
-                leftImageBGR.copyTo(image(roi));
-                roi = cv::Rect(640, 480, 640, 480);
-                rightImageBGR.copyTo(image(roi));
+
+                updateDepthDemoFrame(
+                    sbmSearchBound,
+                    depthResults,
+                    leftImageU8,
+                    rightImageU8,
+                    ref(image)
+                );
 
                 // write to display
                 cv::imshow("Depth Demo", image);
@@ -272,11 +223,9 @@ int main(int argc, char* argv[])
             // Wait for a small amount of time to avoid CPU overhaul
             this_thread::sleep_for(chrono::milliseconds(1));
         }
-
-        return 0;
     }
     else {
-        auto sender = ImageSender("tcp://" + clientAddr + ":5555");
+        auto sender = Sender("tcp://" + clientAddr + ":5555");
 
         while (true) {
             if (!depthEstimateQueue.empty()) {
@@ -297,7 +246,6 @@ int main(int argc, char* argv[])
             // Wait for a small amount of time to avoid CPU overhaul
             this_thread::sleep_for(chrono::milliseconds(2));
         }
-        //*/
-        return 0;
     }
+    return 0;
 }

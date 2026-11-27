@@ -1,3 +1,15 @@
+#include <opencv2/viz.hpp>
+#include <opencv2/core.hpp>
+#include <opencv2/highgui.hpp>
+#include <opencv2/calib3d.hpp>
+
+#include <array>
+#include <cstdint>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
 #include <visualization.h>
 #include <disparityEstimation.h>
 
@@ -5,27 +17,10 @@ namespace Fenrir {
 
     using namespace std;
 
-    pair<CvDepth, int> decodeCvType(int typeCode) {
-        int depth = typeCode & 7;
-        int channels = (typeCode >> 3) + 1;
-        return { static_cast<CvDepth>(depth), channels };
-    }
-
-    int cvTypeFromDepth(CvDepth d) {
-        switch (d) {
-            case CvDepth::U8:  return CV_8U;
-            case CvDepth::I8:  return CV_8S;
-            case CvDepth::U16: return CV_16U;
-            case CvDepth::I16: return CV_16S;
-            case CvDepth::I32: return CV_32S;
-            case CvDepth::F32: return CV_32F;
-            case CvDepth::F64: return CV_64F;
-        }
-        throw runtime_error("bad depth");
-    }
-
-    cv::Mat drawDepthFrame(const vector<StereoBlockMatch>& disparityMeasurements,
-                        int searchBound) {
+    cv::Mat drawDepthFrame(
+        const vector<StereoBlockMatch>& disparityMeasurements,
+        int searchBound
+    ) {
         const int H = 480, W = 640;
         cv::Mat result = cv::Mat::zeros(H, W, CV_8UC3);
         if (disparityMeasurements.empty()) {
@@ -63,11 +58,7 @@ namespace Fenrir {
         return result;
     }
 
-    cv::Mat drawDepthColorKey(const cv::Mat& Q, int sbmSearchBound) {
-        // Get focal length and baseline from Q
-        double f = Q.at<double>(2, 3);
-        double Tx = -1.0 / Q.at<double>(3, 2);
-
+    cv::Mat drawDepthColorKey(double focalLength, double baseline, int sbmSearchBound) {
         // Create key image (vertical color bar)
         int height = 480;
         int width = 200;
@@ -98,7 +89,7 @@ namespace Fenrir {
         for(int i = numTicks - 1; i >= 0; i--) {
             // Disparity from 2 to sbmSearchBound
             float disp = 10.0f + (float)i / (numTicks - 1) * (sbmSearchBound - 20);
-            float depth = f * Tx / disp;
+            float depth = focalLength * baseline / disp;
 
             int y = (int)((disp / sbmSearchBound) * height);
             if(y < 0) y = 0;
@@ -122,5 +113,26 @@ namespace Fenrir {
                     0.6, cv::Scalar(200,200,200), 1);
 
         return key;
+    }
+
+    void updateDepthDemoFrame(
+        int sbmSearchBound,
+        vector<StereoBlockMatch>& depthResults,
+        cv::Mat& leftImage,
+        cv::Mat& rightImage,
+        cv::Mat& image
+    ) {
+        // render depth estimation results
+        cv::Mat depthRender = drawDepthFrame(depthResults, sbmSearchBound);
+        cv::Rect roi(0, 0, 640, 480);
+        depthRender.copyTo(image(roi));
+
+        cv::Mat leftImageBGR, rightImageBGR;
+        cv::cvtColor(leftImage, leftImageBGR, cv::COLOR_GRAY2BGR);
+        cv::cvtColor(rightImage, rightImageBGR, cv::COLOR_GRAY2BGR);
+        roi = cv::Rect(0, 480, 640, 480);
+        leftImageBGR.copyTo(image(roi));
+        roi = cv::Rect(640, 480, 640, 480);
+        rightImageBGR.copyTo(image(roi));
     }
 }

@@ -26,10 +26,12 @@ endif()
 add_executable(DepthDemo src/depthDemo.cpp
     src/visualization.cpp
     src/cameraCapture.cpp
-    src/disparityEstimation.cpp)
+    src/disparityEstimation.cpp
+    src/calibData.cpp)
 target_include_directories(DepthDemo PRIVATE include)
 
 add_executable(VisClient src/visualizationClient.cpp
+    src/calibData.cpp
     src/visualization.cpp)
 target_include_directories(VisClient PRIVATE include)
 

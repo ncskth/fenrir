@@ -11,9 +11,9 @@ namespace Fenrir {
     using namespace std;
 
     struct StereoBlockMatch {
-        int x;
-        int y;
-        int pixelDisparity;
+        int32_t x;
+        int32_t y;
+        int32_t pixelDisparity;
     };
 
     tuple<cv::Mat, cv::Mat> edgeKernels(int width);
